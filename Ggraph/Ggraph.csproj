@@ -1,0 +1,96 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	
+  <PropertyGroup>
+    <!-- Select the framework(s) you wish to target.
+        Rhino 6: net45
+        Rhino 7: net48
+        Rhino 8 Windows: net48, net7.0, net7.0-windows, net7.0-windows10.0.22000.0, etc
+        Rhino 8 Mac: net7.0, net7.0-macos, net7.0-macos12.0, etc
+    -->
+    <TargetFrameworks>net7.0-windows</TargetFrameworks>
+	<UseWPF>true</UseWPF>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <TargetExt>.gha</TargetExt>
+	
+    <NoWarn>NU1701;NETSDK1086</NoWarn>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+  
+  <PropertyGroup>
+    <!-- Specifies information for Assembly and Yak -->
+    <Version>0.1</Version>
+    <Title>Ggraph</Title>
+    <Company>Gradient Lab</Company>
+    <Description>Description of Utilities</Description>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <Compile Remove="C_Building\**" />
+    <Compile Remove="C_Wall\Classes\**" />
+    <EmbeddedResource Remove="C_Building\**" />
+    <EmbeddedResource Remove="C_Wall\Classes\**" />
+    <None Remove="C_Building\**" />
+    <None Remove="C_Wall\Classes\**" />
+    <Page Remove="C_Building\**" />
+    <Page Remove="C_Wall\Classes\**" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <!--<PackageReference Include="Grasshopper" Version="7.0.20314.3001" Condition="$(TargetFramework) == 'net48'" ExcludeAssets="runtime" />-->
+
+    <PackageReference Include="Grasshopper" Version="8.13.24317.13001" Condition="!$(TargetFramework.StartsWith('net4'))" ExcludeAssets="runtime" />
+
+    <PackageReference Include="Neo4j.Driver" Version="5.27.0" />
+	  <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+	  <PackageReference Include="QuikGraph" Version="2.5.0" />
+	  <PackageReference Include="QuikGraph.Serialization" Version="2.5.0" />
+
+  </ItemGroup>
+  
+  <!-- For Windows only builds -->
+  <PropertyGroup Condition="$(TargetFramework.Contains('-windows')) or $(TargetFramework.StartsWith('net4'))">
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+    <!-- Reference WPF for .NET Framework 4.8 -->
+    <ItemGroup Condition="$(TargetFramework) == 'net48'">
+	    <Reference Include="PresentationFramework" />
+    </ItemGroup>
+
+    <!-- Reference WPF for .NET 7 -->
+    <ItemGroup Condition="$(TargetFramework) == 'net7.0-windows'">
+	    <PackageReference Include="Microsoft.Windows.Compatibility" Version="8.0.12" />
+    </ItemGroup>
+
+
+
+	<!-- Reference WinForms for .NET 7.0 on macOS -->
+  <ItemGroup Condition="!($(TargetFramework.Contains('-windows')) or $(TargetFramework.StartsWith('net4')))">
+    <!-- Rhino 8.11 and later you can use this -->
+    <!-- <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" /> -->
+    
+    <!-- Rhino 8.10 and earlier -->
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" ExcludeAssets="all" GeneratePathProperty="true" />
+    <Reference Include="$(PkgMicrosoft_NETFramework_ReferenceAssemblies_net48)\build\.NETFramework\v4.8\System.Windows.Forms.dll" Private="False" />
+    <PackageReference Include="System.Drawing.Common" Version="8.0.10" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <Target Name="CopyPdbForMonoDebugging" AfterTargets="AfterBuild">
+    <!-- Enable debugging in Rhino 6/7 on Mac -->
+    <Copy SourceFiles="$(TargetDir)$(TargetName).pdb" DestinationFiles="$(TargetDir)$(TargetName).gha.pdb" Condition="$([MSBuild]::IsOSPlatform(OSX)) and $(TargetFramework.StartsWith('net4')) and Exists('$(TargetDir)$(TargetName).pdb')" />
+  </Target>
+
+</Project>
