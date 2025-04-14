@@ -1516,10 +1516,7 @@ namespace Glab.C_Graph
                     Edges = graph.QuickGraphObj.Edges.Select(edge => new
                     {
                         Properties = edge.PropJSON, // Include edge properties
-                        Attributes = edge.Attributes,
-                        // Store source and target node IDs for connectivity
-                        SourceNodeID = edge.Source.Id,
-                        TargetNodeID = edge.Target.Id,
+                        Attributes = edge.Attributes,                     
                         // Include geometry data conditionally
                         Curve = includeGeometry ? SerializeCurve(edge.EdgeCurve) : null,
                     }).ToList()
