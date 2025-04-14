@@ -51,8 +51,6 @@ namespace Glab.C_Graph
                 // Create nodes
                 foreach (var node in graph.QuickGraphObj.Vertices)
                 {
-                    node.ConvertPropertiesToAttributes();
-
                     // Ensure type is never null
                     string nodeType = node.Type ?? "DefaultNode";
 
@@ -118,8 +116,6 @@ namespace Glab.C_Graph
                 // Create relationships
                 foreach (var edge in graph.QuickGraphObj.Edges)
                 {
-                    edge.ConvertPropertiesToAttributes();
-
                     // Ensure type is never null - Neo4j won't accept null values for MERGE properties
                     string edgeType = "DefaultEdge";
                     if (!string.IsNullOrEmpty(edge.Type))

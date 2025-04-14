@@ -19,6 +19,24 @@ namespace Glab.C_Graph
         public Curve EdgeCurve { get; set; }
         public List<Curve> EdgeOffsetedCurves { get; private set; } = new List<Curve>();
 
+        public Dictionary<string, object> PropJSON
+        {
+            get
+            {
+                return new Dictionary<string, object>
+            {
+                { "Id", Id },
+                { "Length", Length },
+                { "Type", Type },
+                { "Valence", Valence },
+                { "IsInGraph", IsInGraph },
+                { "GGUID", GGUID.ToString() },
+                { "SourceId", Source?.Id },
+                { "TargetId", Target?.Id }
+            };
+            }
+        }
+
         private Dictionary<string, object> _Attributes = new();
         public Dictionary<string, object> Attributes
         {
@@ -98,28 +116,6 @@ namespace Glab.C_Graph
             Type = type;
             GGUID = Guid.NewGuid();
             LinkedObjects = linkedObjects ?? new List<object>();
-        }
-
-        // Method to convert text and numeric properties to attributes
-        public void ConvertPropertiesToAttributes()
-        {
-            Attributes["Id"] = Id;
-            Attributes["Length"] = Length;
-            Attributes["Type"] = Type;
-            Attributes["Valence"] = Valence;
-            Attributes["IsInGraph"] = IsInGraph;
-
-            // Convert GUID to string
-            Attributes["GGUID"] = GGUID.ToString();
-
-            // Convert null values to string
-            foreach (var key in Attributes.Keys.ToList())
-            {
-                if (Attributes[key] == null)
-                {
-                    Attributes[key] = "null";
-                }
-            }
         }
 
         // Deep copy method

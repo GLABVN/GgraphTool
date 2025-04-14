@@ -16,6 +16,23 @@ namespace Glab.C_Graph
         public string Id { get; set; }
         public Point3d Point { get; set; }
         public string Type { get; set; } = "DefaultNodeType";
+        public Dictionary<string, object> PropJSON
+        {
+            get
+            {
+                return new Dictionary<string, object>
+            {
+                { "Id", Id },
+                { "Type", Type },
+                { "Point", Point },
+                { "Valence", Valence },
+                { "IsInGraph", IsInGraph },
+                { "GGUID", GGUID.ToString() },
+                { "IsNaked", IsNaked },
+                { "Angle", Angle.HasValue ? Angle.Value : "null" }
+            };
+            }
+        }
 
         private Dictionary<string, object> _Attributes = new();
         public Dictionary<string, object> Attributes
@@ -99,31 +116,6 @@ namespace Glab.C_Graph
             Type = type;
             GGUID = Guid.NewGuid();
             LinkedObjects = linkedObjects ?? new List<object>();
-        }
-
-        // Method to convert text and numeric properties to attributes
-        public void ConvertPropertiesToAttributes()
-        {
-            Attributes["Id"] = Id;
-            Attributes["Type"] = Type;
-            Attributes["Valence"] = Valence;
-            Attributes["IsInGraph"] = IsInGraph;
-            if (Angle.HasValue)
-            {
-                Attributes["Angle"] = Angle.Value;
-            }
-
-            // Convert GUID to string
-            Attributes["GGUID"] = GGUID.ToString();
-
-            // Convert null values to string
-            foreach (var key in Attributes.Keys.ToList())
-            {
-                if (Attributes[key] == null)
-                {
-                    Attributes[key] = "null";
-                }
-            }
         }
 
         // Deep copy method

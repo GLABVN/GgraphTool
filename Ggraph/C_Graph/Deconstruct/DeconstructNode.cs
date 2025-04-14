@@ -16,7 +16,7 @@ namespace Glab.C_Graph
         /// </summary>
         public DeconstructNode()
           : base("Deconstruct Node", "DeNode",
-              "Deconstructs a Node object into its attributes and point.",
+              "Deconstructs a Node object into its properties, point, and attributes.",
               "Glab", "Graph")
         {
         }
@@ -35,12 +35,14 @@ namespace Glab.C_Graph
         /// </summary>
         protected override void RegisterOutputParams(GH_OutputParamManager pManager)
         {
-            // Output attributes as text
-            pManager.AddTextParameter("Attributes", "A", "Node attributes as JSON string", GH_ParamAccess.tree);
+            // Output properties as text
+            pManager.AddTextParameter("Properties", "P", "Node properties as JSON string", GH_ParamAccess.tree);
             // Output point
             pManager.AddPointParameter("Point", "P", "Node point", GH_ParamAccess.tree);
             // Output linked objects
             pManager.AddGenericParameter("Linked Objects", "L", "Linked objects of the node", GH_ParamAccess.tree);
+            // Output attributes as text
+            pManager.AddTextParameter("Attributes", "A", "Node attributes as JSON string", GH_ParamAccess.tree);
         }
 
         /// <summary>
@@ -55,9 +57,10 @@ namespace Glab.C_Graph
             if (!DA.GetDataTree(0, out nodeData)) return;
 
             // Initialize output data structures
-            GH_Structure<GH_String> nodeAttributes = new GH_Structure<GH_String>();
+            GH_Structure<GH_String> nodeProperties = new GH_Structure<GH_String>();
             GH_Structure<GH_Point> nodePoints = new GH_Structure<GH_Point>();
             GH_Structure<GH_ObjectWrapper> linkedObjects = new GH_Structure<GH_ObjectWrapper>();
+            GH_Structure<GH_String> nodeAttributes = new GH_Structure<GH_String>();
 
             // Deconstruct node data
             // Iterate through each path in the input data
@@ -81,16 +84,17 @@ namespace Glab.C_Graph
                     // Check if the wrapped object is a Node
                     if (wrapper.Value is GNode node)
                     {
-                        // Run the ConvertPropertiesToAttributes method
-                        node.ConvertPropertiesToAttributes();
-
-                        // Extract the point from the node
-                        Point3d point = node.Point;
-                        nodePoints.Append(new GH_Point(point), path);
+                        // Serialize node properties (PropJSON) to JSON
+                        string propertiesJson = JsonConvert.SerializeObject(node.PropJSON, Formatting.Indented);
+                        nodeProperties.Append(new GH_String(propertiesJson), path);
 
                         // Serialize node attributes to JSON
                         string attributesJson = JsonConvert.SerializeObject(node.Attributes, Formatting.Indented);
                         nodeAttributes.Append(new GH_String(attributesJson), path);
+
+                        // Extract the point from the node
+                        Point3d point = node.Point;
+                        nodePoints.Append(new GH_Point(point), path);
 
                         // Add linked objects to the output
                         if (node.LinkedObjects != null && node.LinkedObjects.Count > 0)
@@ -120,9 +124,10 @@ namespace Glab.C_Graph
             }
 
             // Set output data
-            DA.SetDataTree(0, nodeAttributes);
+            DA.SetDataTree(0, nodeProperties);
             DA.SetDataTree(1, nodePoints);
             DA.SetDataTree(2, linkedObjects);
+            DA.SetDataTree(3, nodeAttributes);
         }
 
         public override GH_Exposure Exposure => GH_Exposure.secondary;

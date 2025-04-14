@@ -1495,17 +1495,13 @@ namespace Glab.C_Graph
             {
                 Graph = new
                 {
-                    // Graph metadata
-                    Type = graph.Type,
-                    GUID = graph.GGUID.ToString(),
+                    Properties = graph.PropJSON, // Include graph properties
                     Attributes = graph.Attributes,
 
                     // Nodes data
                     Nodes = graph.QuickGraphObj.Vertices.Select(node => new
                     {
-                        ID = node.Id,
-                        Type = node.Type,
-                        GUID = node.GGUID.ToString(),
+                        Properties = node.PropJSON, // Include node properties
                         Attributes = node.Attributes,
                         // Include geometry data conditionally
                         Point = includeGeometry ? new
@@ -1514,23 +1510,18 @@ namespace Glab.C_Graph
                             Y = node.Point.Y,
                             Z = node.Point.Z
                         } : null,
-                        Valence = node.Valence,
-                        Angle = node.Angle
                     }).ToList(),
 
                     // Edges data
                     Edges = graph.QuickGraphObj.Edges.Select(edge => new
                     {
-                        ID = edge.Id,
-                        Type = edge.Type,
-                        GUID = edge.GGUID.ToString(),
+                        Properties = edge.PropJSON, // Include edge properties
                         Attributes = edge.Attributes,
                         // Store source and target node IDs for connectivity
                         SourceNodeID = edge.Source.Id,
                         TargetNodeID = edge.Target.Id,
                         // Include geometry data conditionally
                         Curve = includeGeometry ? SerializeCurve(edge.EdgeCurve) : null,
-                        Length = edge.EdgeCurve?.GetLength()
                     }).ToList()
                 }
             }).ToList();
@@ -1538,6 +1529,49 @@ namespace Glab.C_Graph
             // Serialize to JSON with formatting
             return JsonConvert.SerializeObject(graphsModel, Formatting.Indented);
         }
+
+        // Method to draw visualization of the graph edges
+        public static Arc CreateArcFromEdge(GEdge edge)
+        {
+            if (edge == null || edge.EdgeCurve == null)
+                throw new ArgumentNullException(nameof(edge), "The provided edge or its curve is null.");
+
+            // Get the start and end points of the edge
+            Point3d startPoint = edge.Source.Point;
+            Point3d endPoint = edge.Target.Point;
+
+            // Calculate the midpoint of the edge
+            Point3d midpoint = new Point3d(
+                (startPoint.X + endPoint.X) / 2,
+                (startPoint.Y + endPoint.Y) / 2,
+                (startPoint.Z + endPoint.Z) / 2
+            );
+
+            // Calculate the direction vector of the edge
+            Vector3d edgeDirection = endPoint - startPoint;
+
+            // Calculate a perpendicular vector to the edge direction
+            Vector3d perpendicularDirection = Vector3d.CrossProduct(edgeDirection, Vector3d.ZAxis);
+            if (perpendicularDirection.IsZero)
+            {
+                // If the edge is parallel to the Z-axis, use the X-axis for the perpendicular direction
+                perpendicularDirection = Vector3d.CrossProduct(edgeDirection, Vector3d.XAxis);
+            }
+            perpendicularDirection.Unitize();
+
+            // Calculate the distance to move the midpoint
+            double moveDistance = edge.Length / 8.0;
+
+            // Move the midpoint in the perpendicular direction
+            Point3d controlPoint = midpoint + (perpendicularDirection * moveDistance);
+
+            // Create the arc using the three points
+            Arc arc = new Arc(startPoint, controlPoint, endPoint);
+
+            return arc;
+        }
+
+
 
         // Helper method to serialize curve data - only storing lines
         private static object SerializeCurve(Curve curve)
@@ -1556,9 +1590,6 @@ namespace Glab.C_Graph
                 EndPoint = new { X = endPoint.X, Y = endPoint.Y, Z = endPoint.Z }
             };
         }
-
-
-
     }
 
     // KDTree implementation
