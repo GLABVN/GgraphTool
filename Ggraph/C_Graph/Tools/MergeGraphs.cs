@@ -26,6 +26,12 @@ namespace Glab.C_Graph.Tools
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
             pManager.AddGenericParameter("Graphs", "G", "Tree of graphs to merge", GH_ParamAccess.tree);
+            pManager.AddGenericParameter("Additional Nodes", "AN", "Optional tree of additional nodes to include in the merge", GH_ParamAccess.tree);
+            pManager.AddGenericParameter("Additional Edges", "AE", "Optional tree of additional edges to include in the merge", GH_ParamAccess.tree);
+
+            // Mark "Additional Nodes" and "Additional Edges" as optional
+            pManager[1].Optional = true;
+            pManager[2].Optional = true;
         }
 
         /// <summary>
@@ -34,6 +40,8 @@ namespace Glab.C_Graph.Tools
         protected override void RegisterOutputParams(GH_OutputParamManager pManager)
         {
             pManager.AddGenericParameter("Merged Graphs", "MG", "Merged graphs", GH_ParamAccess.tree);
+            pManager.AddGenericParameter("Isolated Nodes", "IN", "Nodes that are isolated after merging", GH_ParamAccess.tree);
+            pManager.AddGenericParameter("Isolated Edges", "IE", "Edges that are isolated after merging", GH_ParamAccess.tree);
         }
 
         /// <summary>
@@ -42,17 +50,25 @@ namespace Glab.C_Graph.Tools
         /// <param name="DA">The DA object is used to retrieve from inputs and store in outputs.</param>
         protected override void SolveInstance(IGH_DataAccess DA)
         {
-            // Initialize input variable
+            // Initialize input variables
             GH_Structure<IGH_Goo> graphTree = new GH_Structure<IGH_Goo>();
+            GH_Structure<IGH_Goo> additionalNodesTree = null;
+            GH_Structure<IGH_Goo> additionalEdgesTree = null;
 
             // Get input data
             if (!DA.GetDataTree(0, out graphTree)) return;
+            DA.GetDataTree(1, out additionalNodesTree);
+            DA.GetDataTree(2, out additionalEdgesTree);
 
             // Simplify input data tree using TreeUtils
             graphTree = TreeUtils.SimplifyTree(graphTree);
+            additionalNodesTree = additionalNodesTree != null ? TreeUtils.SimplifyTree(additionalNodesTree) : null;
+            additionalEdgesTree = additionalEdgesTree != null ? TreeUtils.SimplifyTree(additionalEdgesTree) : null;
 
-            // Initialize output data structure
-            GH_Structure<GH_ObjectWrapper> outputTree = new GH_Structure<GH_ObjectWrapper>();
+            // Initialize output data structures
+            GH_Structure<GH_ObjectWrapper> mergedGraphsTree = new GH_Structure<GH_ObjectWrapper>();
+            GH_Structure<GH_ObjectWrapper> isolatedNodesTree = new GH_Structure<GH_ObjectWrapper>();
+            GH_Structure<GH_ObjectWrapper> isolatedEdgesTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input tree
             foreach (GH_Path path in graphTree.Paths)
@@ -65,15 +81,45 @@ namespace Glab.C_Graph.Tools
                     return graph;
                 }).ToList();
 
+                // Get additional nodes and edges for the current path if available
+                List<GNode> additionalNodes = additionalNodesTree?.get_Branch(path)?.Cast<IGH_Goo>().Select(goo =>
+                {
+                    GNode node = null;
+                    goo.CastTo(out node);
+                    return node;
+                }).ToList();
+
+                List<GEdge> additionalEdges = additionalEdgesTree?.get_Branch(path)?.Cast<IGH_Goo>().Select(goo =>
+                {
+                    GEdge edge = null;
+                    goo.CastTo(out edge);
+                    return edge;
+                }).ToList();
+
                 // Merge the graphs in the current branch
-                Graph mergedGraph = GraphUtils.CombineGraphs(graphs);
+                List<GNode> isolatedNodes;
+                List<GEdge> isolatedEdges;
+                Graph mergedGraph = GraphUtils.CombineGraphs(graphs, out isolatedNodes, out isolatedEdges, additionalNodes, additionalEdges);
 
                 // Add the merged graph to the output tree
-                outputTree.Append(new GH_ObjectWrapper(mergedGraph), path);
+                mergedGraphsTree.Append(new GH_ObjectWrapper(mergedGraph), path);
+
+                // Add isolated nodes and edges to their respective output trees
+                foreach (var node in isolatedNodes)
+                {
+                    isolatedNodesTree.Append(new GH_ObjectWrapper(node), path);
+                }
+
+                foreach (var edge in isolatedEdges)
+                {
+                    isolatedEdgesTree.Append(new GH_ObjectWrapper(edge), path);
+                }
             }
 
             // Set output data
-            DA.SetDataTree(0, outputTree);
+            DA.SetDataTree(0, mergedGraphsTree);
+            DA.SetDataTree(1, isolatedNodesTree);
+            DA.SetDataTree(2, isolatedEdgesTree);
         }
 
         public override GH_Exposure Exposure => GH_Exposure.tertiary;

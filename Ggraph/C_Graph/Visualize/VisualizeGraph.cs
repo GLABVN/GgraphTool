@@ -17,10 +17,12 @@ namespace Glab.C_Graph.Visualize
     {
         private Color previewColor = Color.Red;
         private List<Curve> edgeCurves = new List<Curve>();
+        private List<Curve> visualEdgeCurves = new List<Curve>(); // New field for visual edge curves
         private List<Point3d> nodePoints = new List<Point3d>();
         private List<TextDot> nodeValenceDots = new List<TextDot>();
         private List<TextDot> edgeValenceDots = new List<TextDot>();
         private List<(string text, Point3d position)> nodeAttributeTexts = new List<(string, Point3d)>();
+        private List<(string text, Point3d position)> nodePropertyTexts = new List<(string, Point3d)>(); // New field for node properties
 
         /// <summary>
         /// Initializes a new instance of the VisualizeGraph class.
@@ -38,15 +40,19 @@ namespace Glab.C_Graph.Visualize
         protected override void RegisterInputParams(GH_InputParamManager pManager)
         {
             pManager.AddGenericParameter("Graphs", "G", "Tree of graphs to visualize", GH_ParamAccess.tree);
-            pManager.AddColourParameter("Preview Color", "C", "Color for text preview", GH_ParamAccess.item, Color.Black);
+            pManager.AddColourParameter("Preview Color", "C", "Color for edge preview", GH_ParamAccess.item, Color.DarkGreen);
             pManager.AddBooleanParameter("Show Node Valence", "SN", "Show valence number text dots for nodes", GH_ParamAccess.item, true);
             pManager.AddBooleanParameter("Show Edge Valence", "SE", "Show valence number text dots for edges", GH_ParamAccess.item, false);
+            pManager.AddBooleanParameter("Show Node Properties", "SP", "Show node property text dots", GH_ParamAccess.item, false); // New input for properties
             pManager.AddBooleanParameter("Show Node Attribute", "SA", "Show node attribute text dots", GH_ParamAccess.item, false);
+            pManager.AddBooleanParameter("Show Edge as Arc", "SAE", "Show edges as arcs instead of straight lines", GH_ParamAccess.item, true); // Existing input
             pManager[0].Optional = true;
             pManager[1].Optional = true;
             pManager[2].Optional = true;
             pManager[3].Optional = true;
-            pManager[4].Optional = true;
+            pManager[4].Optional = true; // New input is optional
+            pManager[5].Optional = true;
+            pManager[6].Optional = true;
         }
 
         /// <summary>
@@ -66,17 +72,21 @@ namespace Glab.C_Graph.Visualize
             GH_Structure<IGH_Goo> graphTree = new GH_Structure<IGH_Goo>();
             bool showNodeValence = true;
             bool showEdgeValence = true;
+            bool showNodeProperties = false; // Default value for the new toggle
             bool showNodeAttribute = false;
+            bool showEdgeAsArc = true; // Default value for the existing toggle
 
             // Get input data
             if (!DA.GetDataTree(0, out graphTree))
             {
                 // Clear previous data if graphTree is null
                 edgeCurves.Clear();
+                visualEdgeCurves.Clear(); // Clear visual edge curves
                 nodePoints.Clear();
                 nodeValenceDots.Clear();
                 edgeValenceDots.Clear();
                 nodeAttributeTexts.Clear();
+                nodePropertyTexts.Clear(); // Clear node property texts
                 return;
             }
 
@@ -93,18 +103,26 @@ namespace Glab.C_Graph.Visualize
             // Get the show edge valence flag
             DA.GetData(3, ref showEdgeValence);
 
+            // Get the show node properties flag
+            DA.GetData(4, ref showNodeProperties);
+
             // Get the show node attribute flag
-            DA.GetData(4, ref showNodeAttribute);
+            DA.GetData(5, ref showNodeAttribute);
+
+            // Get the show edge as arc flag
+            DA.GetData(6, ref showEdgeAsArc);
 
             // Simplify input data trees using TreeUtils
             graphTree = TreeUtils.SimplifyTree(graphTree);
 
             // Clear previous data
             edgeCurves.Clear();
+            visualEdgeCurves.Clear(); // Clear visual edge curves
             nodePoints.Clear();
             nodeValenceDots.Clear();
             edgeValenceDots.Clear();
             nodeAttributeTexts.Clear();
+            nodePropertyTexts.Clear(); // Clear node property texts
 
             // Iterate through paths in the input tree
             foreach (GH_Path path in graphTree.Paths)
@@ -124,6 +142,24 @@ namespace Glab.C_Graph.Visualize
                     foreach (var edge in graph.QuickGraphObj.Edges)
                     {
                         edgeCurves.Add(edge.EdgeCurve);
+
+                        // Add visual edge curves as arcs if the toggle is enabled
+                        if (showEdgeAsArc)
+                        {
+                            try
+                            {
+                                Arc arc = GraphUtils.CreateArcFromEdge(edge);
+                                visualEdgeCurves.Add(new ArcCurve(arc));
+                            }
+                            catch (Exception ex)
+                            {
+                                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Failed to create arc for edge: {ex.Message}");
+                            }
+                        }
+                        else
+                        {
+                            visualEdgeCurves.Add(edge.EdgeCurve); // Use the original edge curve
+                        }
 
                         // Create text dot for edge valence if showEdgeValence is true
                         if (showEdgeValence)
@@ -146,6 +182,13 @@ namespace Glab.C_Graph.Visualize
                             nodeValenceDots.Add(textDot);
                         }
 
+                        // Create text for node properties if showNodeProperties is true
+                        if (showNodeProperties)
+                        {
+                            string propertiesJson = JsonConvert.SerializeObject(node.PropJSON, Formatting.Indented);
+                            nodePropertyTexts.Add((propertiesJson, node.Point));
+                        }
+
                         // Create text for node attribute if showNodeAttribute is true
                         if (showNodeAttribute)
                         {
@@ -161,8 +204,8 @@ namespace Glab.C_Graph.Visualize
         {
             base.DrawViewportWires(args);
 
-            // Draw the edge curves
-            foreach (var curve in edgeCurves)
+            // Draw the visual edge curves
+            foreach (var curve in visualEdgeCurves)
             {
                 args.Display.DrawCurve(curve, previewColor);
             }
@@ -183,6 +226,12 @@ namespace Glab.C_Graph.Visualize
             foreach (var textDot in edgeValenceDots)
             {
                 args.Display.DrawDot(textDot, previewColor, Color.White, Color.Black);
+            }
+
+            // Draw the node property texts
+            foreach (var (text, position) in nodePropertyTexts)
+            {
+                args.Display.Draw2dText(text, Color.Green, position, false, 12, "Arial");
             }
 
             // Draw the node attribute texts

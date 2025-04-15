@@ -16,7 +16,7 @@ namespace Glab.C_Graph
         /// </summary>
         public DeconstructGraph()
           : base("Deconstruct Graph", "DeGraph",
-              "Deconstructs a Graph object into its attributes, nodes, edges, isolated nodes, and isolated edges.",
+              "Deconstructs a Graph object into its properties, nodes, edges, and attributes.",
               "Glab", "Graph")
         {
         }
@@ -35,12 +35,14 @@ namespace Glab.C_Graph
         /// </summary>
         protected override void RegisterOutputParams(GH_OutputParamManager pManager)
         {
-            // Output attributes as text
-            pManager.AddTextParameter("Attributes", "A", "Graph attributes as JSON string", GH_ParamAccess.tree);
+            // Output properties as text
+            pManager.AddTextParameter("Properties", "P", "Graph properties as JSON string", GH_ParamAccess.tree);
             // Output nodes as tree
             pManager.AddGenericParameter("Nodes", "N", "Graph nodes as tree", GH_ParamAccess.tree);
             // Output edges as tree
             pManager.AddGenericParameter("Edges", "E", "Graph edges as tree", GH_ParamAccess.tree);
+            // Output attributes as text
+            pManager.AddTextParameter("Attributes", "A", "Graph attributes as JSON string", GH_ParamAccess.tree);
         }
 
         /// <summary>
@@ -52,11 +54,10 @@ namespace Glab.C_Graph
             GH_Structure<IGH_Goo> graphData = new GH_Structure<IGH_Goo>();
 
             // Output variables
-            GH_Structure<GH_String> graphAttributes = new GH_Structure<GH_String>();
+            GH_Structure<GH_String> graphProperties = new GH_Structure<GH_String>();
             GH_Structure<GH_ObjectWrapper> nodesTree = new GH_Structure<GH_ObjectWrapper>();
             GH_Structure<GH_ObjectWrapper> edgesTree = new GH_Structure<GH_ObjectWrapper>();
-            GH_Structure<GH_ObjectWrapper> isolatedNodesTree = new GH_Structure<GH_ObjectWrapper>();
-            GH_Structure<GH_ObjectWrapper> isolatedEdgesTree = new GH_Structure<GH_ObjectWrapper>();
+            GH_Structure<GH_String> graphAttributes = new GH_Structure<GH_String>();
 
             // Get graph data
             if (!DA.GetDataTree(0, out graphData)) return;
@@ -87,10 +88,11 @@ namespace Glab.C_Graph
                         // Create a subpath for each graph
                         GH_Path subPath = path.AppendElement(j);
 
-                        // Run the ConvertPropertiesToAttributes method
-                        graph.ConvertPropertiesToAttributes();
+                        // Serialize graph properties (PropJSON) to JSON
+                        string propertiesJson = JsonConvert.SerializeObject(graph.PropJSON, Formatting.Indented);
+                        graphProperties.Append(new GH_String(propertiesJson), subPath);
 
-                        // Serialize graph attributes to JSON with pretty-printing
+                        // Serialize graph attributes to JSON
                         string attributesJson = JsonConvert.SerializeObject(graph.Attributes, Formatting.Indented);
                         graphAttributes.Append(new GH_String(attributesJson), subPath);
 
@@ -116,9 +118,10 @@ namespace Glab.C_Graph
             }
 
             // Set output data
-            DA.SetDataTree(0, graphAttributes);
+            DA.SetDataTree(0, graphProperties);
             DA.SetDataTree(1, nodesTree);
             DA.SetDataTree(2, edgesTree);
+            DA.SetDataTree(3, graphAttributes);
         }
 
         public override GH_Exposure Exposure => GH_Exposure.secondary;
