@@ -29,9 +29,9 @@ namespace Glab.C_Graph.Tools
         {
             pManager.AddGenericParameter("Graphs", "G", "Tree of graphs to search", GH_ParamAccess.tree);
             pManager.AddPointParameter("Points", "P", "Points to find corresponding nodes", GH_ParamAccess.tree);
-            pManager.AddTextParameter("Type", "T", "New type for the found nodes", GH_ParamAccess.tree);
+            pManager.AddTextParameter("Type to Change", "T", "New type for the found nodes", GH_ParamAccess.tree);
             pManager[2].Optional = true;
-            pManager.AddTextParameter("Attributes", "A", "Attributes as JSON string for the found nodes", GH_ParamAccess.tree);
+            pManager.AddTextParameter("Attributes to Change", "A", "Attributes as JSON string for the found nodes", GH_ParamAccess.tree);
             pManager[3].Optional = true;
         }
 
@@ -59,80 +59,49 @@ namespace Glab.C_Graph.Tools
             // Get input data
             if (!DA.GetDataTree(0, out graphTree)) return;
             if (!DA.GetDataTree(1, out pointTree)) return;
-            bool hasType = DA.GetDataTree(2, out typeTree) && !typeTree.IsEmpty;
-            bool hasAttributes = DA.GetDataTree(3, out attributesTree) && !attributesTree.IsEmpty;
+            DA.GetDataTree(2, out typeTree);
+            DA.GetDataTree(3, out attributesTree);
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            pointTree = TreeUtils.SimplifyTree(pointTree);
-            typeTree = TreeUtils.SimplifyTree(typeTree);
-            attributesTree = TreeUtils.SimplifyTree(attributesTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(pointTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(pointTree, pointTree);
+            TreeUtils.ValidateTreeStructure(pointTree, typeTree, repeatLast: true);
+            TreeUtils.ValidateTreeStructure(pointTree, attributesTree, repeatLast: true);
 
             // Initialize output data structures
             GH_Structure<GH_ObjectWrapper> updatedGraphTree = new GH_Structure<GH_ObjectWrapper>();
             GH_Structure<GH_ObjectWrapper> outputTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get graphs and points from the current branch
-                var graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var points = TreeUtils.ExtractBranchData(pointTree, pathIndex);
+                var types = TreeUtils.ExtractBranchData(typeTree, pathIndex);
+                var attributes = TreeUtils.ExtractBranchData(attributesTree, pathIndex);
 
-                var points = pointTree.get_Branch(path).Cast<GH_Point>().Select(ghPoint => ghPoint.Value).ToList();
-
-                List<string> types = new List<string>();
-                if (hasType)
-                {
-                    var branch = typeTree.get_Branch(path);
-                    if (branch != null)
-                    {
-                        types = branch.Cast<GH_String>().Select(ghString => ghString.Value).ToList();
-                    }
-                }
-
-                List<string> attributes = new List<string>();
-                if (hasAttributes)
-                {
-                    var branch = attributesTree.get_Branch(path);
-                    if (branch != null)
-                    {
-                        attributes = branch.Cast<GH_String>().Select(ghString => ghString.Value).ToList();
-                    }
-                }
-
-                // Iterate through each point and corresponding graphs
+                // Process each graph and corresponding points
                 for (int i = 0; i < points.Count; i++)
                 {
-                    string type = types.Count > 0 ? types[i % types.Count] : null;
-                    string attributesJson = attributes.Count > 0 ? attributes[i % attributes.Count] : null;
+                    string type = types[i];
+                    string attributesJson = attributes[i];
                     Dictionary<string, object> attributeDict = attributesJson != null
                         ? JsonConvert.DeserializeObject<Dictionary<string, object>>(attributesJson)
                         : null;
 
-                    foreach (var graph in graphs)
+                    var node = GraphUtils.FindEditNode(graphs[0], points[i], type, attributeDict);
+                    if (node != null)
                     {
-                        var node = GraphUtils.FindEditNode(graph, points[i], type, attributeDict);
-                        if (node != null)
-                        {
-                            // Wrap the Node object
-                            GH_ObjectWrapper nodeWrapper = new GH_ObjectWrapper(node);
+                        // Wrap the Node object
+                        GH_ObjectWrapper nodeWrapper = new GH_ObjectWrapper(node);
 
-                            // Append the node to the output tree at the current path
-                            outputTree.Append(nodeWrapper, path);
-                        }
+                        // Append the node to the output tree at the current path
+                        outputTree.Append(nodeWrapper, graphTree.Paths[pathIndex]);
                     }
+                    
                 }
-
-                // Append the updated graphs to the output tree
-                foreach (var graph in graphs)
-                {
-                    updatedGraphTree.Append(new GH_ObjectWrapper(graph), path);
-                }
+                updatedGraphTree.Append(new GH_ObjectWrapper(graphs[0]), graphTree.Paths[pathIndex]);
             }
 
             // Set output data

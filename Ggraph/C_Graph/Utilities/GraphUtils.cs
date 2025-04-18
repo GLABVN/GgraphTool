@@ -55,7 +55,7 @@ namespace Glab.C_Graph
             {
                 // Extract curves and points from nodes and edges
                 List<Curve> edgeCurves = edges.Select(edge => edge.EdgeCurve).ToList();
-                List<Point3d> points = nodes?.Select(node => node.Point).ToList() ?? new List<Point3d>();
+                List<Point3d> points = nodes?.Where(node => node != null).Select(node => node.Point).ToList() ?? new List<Point3d>();
 
                 // Shatter curves at intersections and points
                 var (shatteredCurves, originalEdgeIndices) =
@@ -69,6 +69,8 @@ namespace Glab.C_Graph
                 {
                     foreach (var node in nodes)
                     {
+                        if (node == null) continue;
+
                         var point = node.Point;
                         if (!nodeDict.Values.Any(n => PointUtils.ArePointsEqual(n.Point, point)))
                         {
@@ -361,6 +363,7 @@ namespace Glab.C_Graph
             {
                 foreach (var node in additionalNodes)
                 {
+                    if (node == null) continue;
                     Point3d roundedPoint = PointUtils.RoundPoint(node.Point);
                     if (!nodeDict.ContainsKey(roundedPoint))
                     {
@@ -394,7 +397,7 @@ namespace Glab.C_Graph
             return combinedGraph;
         }
 
-        public static Graph PruneGraphByType(Graph graph, string type = "zzz", string JsonString = null, int valence = 1, bool pruneTypeNullOnly = true, bool pruneOnce = false)
+        public static Graph PruneGraphByType(Graph graph, string type = "zzz", string JsonString = null, int valence = 1, bool pruneTypeUnsetOnly = true, bool pruneOnce = false)
         {
             if (graph == null)
                 throw new ArgumentNullException(nameof(graph));
@@ -435,18 +438,18 @@ namespace Glab.C_Graph
                     bool shouldRemove = false;
 
                     // If pruneTypeNull is true, skip nodes with type != null
-                    if (pruneTypeNullOnly && node.Type != null)
+                    if (pruneTypeUnsetOnly && node.Type != "unset")
                     {
                         continue;
                     }
 
                     // If no additional conditions are provided, use only valence
-                    if (type == null && jsonAttributes == null)
+                    if (type == "unset" && jsonAttributes == null)
                     {
                         shouldRemove = matchesValence;
                     }
                     // Case 1: Both type and JsonString provided (OR gate for exclusion)
-                    else if (type != null && jsonAttributes != null)
+                    else if (type != "unset" && jsonAttributes != null)
                     {
                         bool matchesType = node.Type == type;
                         bool matchesAttributes = true;
@@ -464,7 +467,7 @@ namespace Glab.C_Graph
                         shouldRemove = matchesValence && (!matchesType || !matchesAttributes);
                     }
                     // Case 2: Only type provided
-                    else if (type != null)
+                    else if (type != "unset")
                     {
                         shouldRemove = matchesValence && node.Type != type;
                     }
@@ -1198,7 +1201,7 @@ namespace Glab.C_Graph
         }
 
 
-        public static Dictionary<Point3d, Graph> FindClosestGraphs(List<Graph> graphs, List<Point3d> testPoints, out List<double> minDistances)
+        public static Dictionary<Point3d, Graph> FindClosestGraph(List<Graph> graphs, List<Point3d> testPoints, out List<double> minDistances)
         {
             if (graphs == null || !graphs.Any())
             {

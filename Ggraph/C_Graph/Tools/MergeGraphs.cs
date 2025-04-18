@@ -52,18 +52,18 @@ namespace Glab.C_Graph.Tools
         {
             // Initialize input variables
             GH_Structure<IGH_Goo> graphTree = new GH_Structure<IGH_Goo>();
-            GH_Structure<IGH_Goo> additionalNodesTree = null;
-            GH_Structure<IGH_Goo> additionalEdgesTree = null;
+            GH_Structure<IGH_Goo> additionalNodesTree = new GH_Structure<IGH_Goo>();
+            GH_Structure<IGH_Goo> additionalEdgesTree = new GH_Structure<IGH_Goo>();
 
             // Get input data
             if (!DA.GetDataTree(0, out graphTree)) return;
             DA.GetDataTree(1, out additionalNodesTree);
             DA.GetDataTree(2, out additionalEdgesTree);
 
-            // Simplify input data tree using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            additionalNodesTree = additionalNodesTree != null ? TreeUtils.SimplifyTree(additionalNodesTree) : null;
-            additionalEdgesTree = additionalEdgesTree != null ? TreeUtils.SimplifyTree(additionalEdgesTree) : null;
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, additionalNodesTree);
+            TreeUtils.ValidateTreeStructure(graphTree, additionalEdgesTree);
 
             // Initialize output data structures
             GH_Structure<GH_ObjectWrapper> mergedGraphsTree = new GH_Structure<GH_ObjectWrapper>();
@@ -71,30 +71,12 @@ namespace Glab.C_Graph.Tools
             GH_Structure<GH_ObjectWrapper> isolatedEdgesTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input tree
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get branches for the current path
-                List<Graph> graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
-
-                // Get additional nodes and edges for the current path if available
-                List<GNode> additionalNodes = additionalNodesTree?.get_Branch(path)?.Cast<IGH_Goo>().Select(goo =>
-                {
-                    GNode node = null;
-                    goo.CastTo(out node);
-                    return node;
-                }).ToList();
-
-                List<GEdge> additionalEdges = additionalEdgesTree?.get_Branch(path)?.Cast<IGH_Goo>().Select(goo =>
-                {
-                    GEdge edge = null;
-                    goo.CastTo(out edge);
-                    return edge;
-                }).ToList();
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var additionalNodes = TreeUtils.ExtractBranchData<GNode>(additionalNodesTree, pathIndex);
+                var additionalEdges = TreeUtils.ExtractBranchData<GEdge>(additionalEdgesTree, pathIndex);
 
                 // Merge the graphs in the current branch
                 List<GNode> isolatedNodes;
@@ -102,17 +84,17 @@ namespace Glab.C_Graph.Tools
                 Graph mergedGraph = GraphUtils.CombineGraphs(graphs, out isolatedNodes, out isolatedEdges, additionalNodes, additionalEdges);
 
                 // Add the merged graph to the output tree
-                mergedGraphsTree.Append(new GH_ObjectWrapper(mergedGraph), path);
+                mergedGraphsTree.Append(new GH_ObjectWrapper(mergedGraph), graphTree.Paths[pathIndex]);
 
                 // Add isolated nodes and edges to their respective output trees
                 foreach (var node in isolatedNodes)
                 {
-                    isolatedNodesTree.Append(new GH_ObjectWrapper(node), path);
+                    isolatedNodesTree.Append(new GH_ObjectWrapper(node), graphTree.Paths[pathIndex]);
                 }
 
                 foreach (var edge in isolatedEdges)
                 {
-                    isolatedEdgesTree.Append(new GH_ObjectWrapper(edge), path);
+                    isolatedEdgesTree.Append(new GH_ObjectWrapper(edge), graphTree.Paths[pathIndex]);
                 }
             }
 

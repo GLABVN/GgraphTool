@@ -61,9 +61,6 @@ namespace Glab.C_Graph.Tools
             DA.GetData(3, ref collapseShortEdges);
             DA.GetData(4, ref minLength);
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> outputTree = new GH_Structure<GH_ObjectWrapper>();
 

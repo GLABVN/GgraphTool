@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Glab.Utilities;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
-using Rhino.Geometry;
 
 namespace Glab.C_Graph.Construct
 {
@@ -58,85 +58,39 @@ namespace Glab.C_Graph.Construct
             GH_Structure<GH_Curve> curvesTree = new GH_Structure<GH_Curve>();
             GH_Structure<GH_String> typesTree = new GH_Structure<GH_String>();
             GH_Structure<GH_String> attributesTree = new GH_Structure<GH_String>();
-            GH_Structure<IGH_Goo> linkedObjectsTree = new GH_Structure<IGH_Goo>();
+            GH_Structure<IGH_Goo> linkedObjectsTree = new();
 
             // Get input data
             if (!DA.GetDataTree(0, out curvesTree)) return;
-            bool hasTypes = DA.GetDataTree(1, out typesTree) && !typesTree.IsEmpty;
-            bool hasAttributes = DA.GetDataTree(2, out attributesTree) && !attributesTree.IsEmpty;
-            bool hasLinkedObjects = DA.GetDataTree(3, out linkedObjectsTree) && !linkedObjectsTree.IsEmpty;
+            DA.GetDataTree(1, out typesTree);
+            DA.GetDataTree(2, out attributesTree);
+            DA.GetDataTree(3, out linkedObjectsTree);
 
-            // Simplify input data trees
-            curvesTree.Simplify(GH_SimplificationMode.CollapseAllOverlaps);
-            if (hasTypes)
-            {
-                typesTree.Simplify(GH_SimplificationMode.CollapseAllOverlaps);
-            }
-            if (hasAttributes)
-            {
-                attributesTree.Simplify(GH_SimplificationMode.CollapseAllOverlaps);
-            }
-            if (hasLinkedObjects)
-            {
-                linkedObjectsTree.Simplify(GH_SimplificationMode.CollapseAllOverlaps);
-            }
+            // Validate and simplify input trees
+            TreeUtils.ValidateTreeStructure(curvesTree, curvesTree);
+            TreeUtils.ValidateTreeStructure(curvesTree, typesTree, repeatLast: true, defaultValue: new GH_String("unset"));
+            TreeUtils.ValidateTreeStructure(curvesTree, attributesTree, repeatLast: true);
+            TreeUtils.ValidateTreeStructure(curvesTree, linkedObjectsTree, raiseEqualBranchItemCountError: true);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> edgesTree = new GH_Structure<GH_ObjectWrapper>();
 
-            // Iterate through paths in the input trees
-            foreach (GH_Path path in curvesTree.Paths)
+            // Iterate through paths in the input trees using a for loop
+            for (int pathIndex = 0; pathIndex < curvesTree.Paths.Count; pathIndex++)
             {
-                // Get curves from the current branch
-                var curves = curvesTree.get_Branch(path).Cast<GH_Curve>().Select(ghCurve => ghCurve.Value).ToList();
-                var types = hasTypes ? typesTree.get_Branch(path).Cast<GH_String>().Select(ghString => ghString.Value).ToList() : new List<string>();
-                var attributes = hasAttributes ? attributesTree.get_Branch(path).Cast<GH_String>().Select(ghString => ghString.Value).ToList() : new List<string>();
-                var linkedObjects = hasLinkedObjects ? linkedObjectsTree.get_Branch(path).Cast<IGH_Goo>().ToList() : new List<IGH_Goo>();
-
-                // Check if the count of curves and types are equal
-                if (hasTypes && curves.Count != types.Count)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of curves and types should be equal.");
-                    return;
-                }
-
-                // Check if the count of curves and attributes are equal
-                if (hasAttributes && curves.Count != attributes.Count)
-                {
-                    if (attributes.Count == 1)
-                    {
-                        // Repeat the single attribute for all curves
-                        attributes = Enumerable.Repeat(attributes[0], curves.Count).ToList();
-                    }
-                    else
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of curves and attributes should be equal or attributes should have a single item.");
-                        return;
-                    }
-                }
-
-                // Check if the count of curves and linked objects are equal
-                if (hasLinkedObjects && curves.Count != linkedObjects.Count)
-                {
-                    if (linkedObjects.Count == 1)
-                    {
-                        // Repeat the single linked object for all curves
-                        linkedObjects = Enumerable.Repeat(linkedObjects[0], curves.Count).ToList();
-                    }
-                    else
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of curves and linked objects should be equal or linked objects should have a single item.");
-                        return;
-                    }
-                }
+                // Use ExtractBranchData to get branches for the current path
+                var curves = TreeUtils.ExtractBranchData(curvesTree, pathIndex);
+                var types = TreeUtils.ExtractBranchData(typesTree, pathIndex);
+                var attributes = TreeUtils.ExtractBranchData(attributesTree, pathIndex);
+                var linkedObjects = TreeUtils.ExtractBranchData<IGH_Goo>(linkedObjectsTree, pathIndex);
 
                 // Create edges from curves, types, attributes, and linked objects
                 for (int i = 0; i < curves.Count; i++)
                 {
                     var curve = curves[i];
-                    var type = hasTypes && i < types.Count ? types[i] : null;
-                    var attributeJson = hasAttributes && i < attributes.Count ? attributes[i] : null;
-                    var linkedObject = hasLinkedObjects && i < linkedObjects.Count ? linkedObjects[i] : null;
+                    var type = i < types.Count ? types[i] : null;
+                    var attributeJson = i < attributes.Count ? attributes[i] : null;
+                    var linkedObject = i < linkedObjects.Count ? linkedObjects[i] : null;
 
                     // Create edge
                     GEdge edge = new GEdge(curve, type);
@@ -161,13 +115,16 @@ namespace Glab.C_Graph.Construct
                     GH_ObjectWrapper edgeWrapper = new GH_ObjectWrapper(edge);
 
                     // Append the edge to the output tree at the current path
-                    edgesTree.Append(edgeWrapper, path);
+                    edgesTree.Append(edgeWrapper, curvesTree.Paths[pathIndex]);
                 }
             }
+
+
 
             // Set output data
             DA.SetDataTree(0, edgesTree);
         }
+
 
         public override GH_Exposure Exposure => GH_Exposure.primary;
 

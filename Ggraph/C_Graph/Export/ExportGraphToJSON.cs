@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using Grasshopper.Kernel;
-using Rhino.Geometry;
 using System.Text;
 
 namespace Glab.C_Graph.Export

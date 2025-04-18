@@ -4,9 +4,7 @@ using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Rhino.Geometry;
 using Glab.Utilities;
-using Newtonsoft.Json;
 
 namespace Glab.C_Graph.Tools
 {
@@ -53,51 +51,27 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(0, out graphTree)) return;
             if (!DA.GetDataTree(1, out nodeTree)) return;
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            nodeTree = TreeUtils.SimplifyTree(nodeTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Ensure each branch in graphTree has exactly one graph
+            TreeUtils.ValidateTreeStructure(graphTree, nodeTree); // Validate nodeTree against graphTree
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> modifiedGraphTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get graphs from the current branch
-                var graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var nodes = TreeUtils.ExtractBranchData<GNode>(nodeTree, pathIndex);
 
-                // Get nodes from the corresponding branch in the node tree
-                var nodes = nodeTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    GNode node = null;
-                    goo.CastTo(out node);
-                    return node;
-                }).ToList();
+                var graph = graphs[0];
 
-                // Check if the number of graphs and nodes match
-                if (graphs.Count > 1 && graphs.Count != nodes.Count)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The number of graphs and nodes in the branch must be the same if there is more than one graph.");
-                    return;
-                }
+                // Call the ConnectNodesToGraph method
+                Graph modifiedGraph = GraphUtils.ConnectNodesToGraph(graph, nodes);
 
-                // Iterate through each graph
-                for (int i = 0; i < graphs.Count; i++)
-                {
-                    var graph = graphs[i];
-                    var nodesToConnect = (graphs.Count == 1) ? nodes : new List<GNode> { nodes[i] };
-
-                    // Call the ConnectNodesToGraph method
-                    Graph modifiedGraph = GraphUtils.ConnectNodesToGraph(graph, nodesToConnect);
-
-                    // Append the modified graph to the output tree
-                    modifiedGraphTree.Append(new GH_ObjectWrapper(modifiedGraph), path);
-                }
+                // Append the modified graph to the output tree
+                modifiedGraphTree.Append(new GH_ObjectWrapper(modifiedGraph), graphTree.Paths[pathIndex]);
             }
 
             // Set output data

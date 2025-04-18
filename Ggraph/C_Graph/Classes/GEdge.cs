@@ -15,7 +15,7 @@ namespace Glab.C_Graph
     {
         public string Id => $"{Source.Id}-{Target.Id}"; // Dynamic Id property
         public double Length => EdgeCurve?.GetLength() ?? 0.0; // Dynamic Length property
-        public string Type { get; set; } = "DefaultEdgeType"; // Default type property
+        public string Type { get; set; } = "unset";
         public Curve EdgeCurve { get; set; }
         public List<Curve> EdgeOffsetedCurves { get; private set; } = new List<Curve>();
 
@@ -96,7 +96,7 @@ namespace Glab.C_Graph
         // New property to store linked objects
         public List<object> LinkedObjects { get; set; } = new List<object>();
 
-        public GEdge(GNode source, GNode target, string type = null, List<object> linkedObjects = null)
+        public GEdge(GNode source, GNode target, string type = "unset", List<object> linkedObjects = null)
         {
             Source = source;
             Target = target;
@@ -107,7 +107,7 @@ namespace Glab.C_Graph
         }
 
         // Overloaded constructor to accept a Curve object
-        public GEdge(Curve curve, string type = null, List<object> linkedObjects = null)
+        public GEdge(Curve curve, string type = "unset", List<object> linkedObjects = null)
         {
             Source = new GNode(curve.PointAtStart);
             Target = new GNode(curve.PointAtEnd);

@@ -4,9 +4,7 @@ using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Rhino.Geometry;
 using Glab.Utilities;
-using Newtonsoft.Json;
 
 namespace Glab.C_Graph.Tools
 {
@@ -53,33 +51,19 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(0, out graphTree)) return;
             if (!DA.GetDataTree(1, out distanceTree)) return;
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            distanceTree = TreeUtils.SimplifyTree(distanceTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, distanceTree, raiseEqualBranchItemCountError: true);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> modifiedGraphTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get graphs from the current branch
-                var graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
-
-                // Get distances from the corresponding branch in the distance tree
-                var distances = distanceTree.get_Branch(path).Cast<GH_Number>().Select(ghNumber => ghNumber.Value).ToList();
-
-                // Check if the number of graphs and distances match
-                if (graphs.Count != distances.Count)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The number of graphs and distances in the branch must be the same.");
-                    return;
-                }
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var distances = TreeUtils.ExtractBranchData(distanceTree, pathIndex);
 
                 // Iterate through each graph
                 for (int i = 0; i < graphs.Count; i++)
@@ -91,7 +75,7 @@ namespace Glab.C_Graph.Tools
                     var modifiedGraph = GraphUtils.ExtendNakedEdges(graph, distance);
 
                     // Append the modified graph to the output tree
-                    modifiedGraphTree.Append(new GH_ObjectWrapper(modifiedGraph), path);
+                    modifiedGraphTree.Append(new GH_ObjectWrapper(modifiedGraph), graphTree.Paths[pathIndex]);
                 }
             }
 

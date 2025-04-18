@@ -56,57 +56,39 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(1, out nodeTree)) return;
             if (!DA.GetData(2, ref maxDistance)) return;
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            nodeTree = TreeUtils.SimplifyTree(nodeTree);
-
-            // Check if the number of branches in the input trees is the same
-            if (graphTree.Branches.Count != nodeTree.Branches.Count)
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The number of branches in the input trees must be the same.");
-                return;
-            }
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, nodeTree);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> neighborNodesTree = new GH_Structure<GH_ObjectWrapper>();
 
-            // Iterate through nodes in the input trees
-            foreach (GH_Path path in graphTree.Paths)
+            // Iterate through paths in the input trees
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get graphs from the current branch
-                var graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var nodes = TreeUtils.ExtractBranchData<GNode>(nodeTree, pathIndex);
 
-                // Get nodes from the corresponding branch in the node tree
-                var nodes = nodeTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
+                // Ensure each branch processes one graph
+                if (graphs.Count != 1)
                 {
-                    GNode node = null;
-                    goo.CastTo(out node);
-                    return node;
-                }).ToList();
-
-                // Check if the number of graphs and nodes match
-                if (graphs.Count != nodes.Count)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The number of graphs and nodes in the branch must be the same.");
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Each branch in the graph tree must contain exactly one graph.");
                     return;
                 }
 
-                // Iterate through each graph
-                for (int i = 0; i < graphs.Count; i++)
+                var graph = graphs[0];
+
+                // Iterate through each node in the branch
+                for (int nodeIndex = 0; nodeIndex < nodes.Count; nodeIndex++)
                 {
-                    var graph = graphs[i];
-                    var node = nodes[i];
+                    var node = nodes[nodeIndex];
 
                     // Call the FindNeighborNodes method
                     var neighborNodesDict = GraphUtils.FindNeighborNodes(node, maxDistance);
 
-                    // Append the neighbor nodes to the output tree
-                    var subPath = path.AppendElement(i);
+                    // Append the neighbor nodes to the output tree under a unique subpath
+                    var subPath = graphTree.Paths[pathIndex].AppendElement(nodeIndex);
                     foreach (var kvp in neighborNodesDict)
                     {
                         neighborNodesTree.AppendRange(kvp.Value.Select(n => new GH_ObjectWrapper(n)), subPath);

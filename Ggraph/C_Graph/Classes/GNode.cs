@@ -15,7 +15,7 @@ namespace Glab.C_Graph
     {
         public string Id { get; set; }
         public Point3d Point { get; set; }
-        public string Type { get; set; } = "DefaultNodeType";
+        public string Type { get; set; } = "unset";
         public Dictionary<string, object> PropJSON
         {
             get
@@ -110,7 +110,7 @@ namespace Glab.C_Graph
         // New property to store linked objects
         public List<object> LinkedObjects { get; set; } = new List<object>();
 
-        public GNode(Point3d point, string type = null, List<object> linkedObjects = null)
+        public GNode(Point3d point, string type = "unset", List<object> linkedObjects = null)
         {
             Point = point;
             Type = type;

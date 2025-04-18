@@ -52,37 +52,26 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(0, out graphTree)) return;
             if (!DA.GetDataTree(1, out pointTree)) return;
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            pointTree = TreeUtils.SimplifyTree(pointTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, pointTree);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> outputTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input tree
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get branches for the current path
-                List<Graph> graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var points = TreeUtils.ExtractBranchData(pointTree, pathIndex);
+
+                var subgraphs = GraphUtils.SplitGraphAtPoints(graphs[0], points);
+
+                // Add the subgraphs to the output tree
+                foreach (var subgraph in subgraphs)
                 {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
-
-                // Get points from the corresponding branch in the point tree
-                List<Point3d> points = pointTree.get_Branch(path).Cast<GH_Point>().Select(ghPoint => ghPoint.Value).ToList();
-
-                // Split the graphs in the current branch
-                foreach (var graph in graphs)
-                {
-                    var subgraphs = GraphUtils.SplitGraphAtPoints(graph, points);
-
-                    // Add the subgraphs to the output tree
-                    foreach (var subgraph in subgraphs)
-                    {
-                        outputTree.Append(new GH_ObjectWrapper(subgraph), path);
-                    }
+                    outputTree.Append(new GH_ObjectWrapper(subgraph), graphTree.Paths[pathIndex]);
                 }
             }
 

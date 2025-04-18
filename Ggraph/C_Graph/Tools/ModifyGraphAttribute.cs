@@ -30,10 +30,10 @@ namespace Glab.C_Graph.Tools
             // Graph as tree
             pManager.AddGenericParameter("Graph", "G", "Graph object as tree", GH_ParamAccess.tree);
             // Type as tree (optional)
-            pManager.AddTextParameter("Type", "T", "New type for the graph", GH_ParamAccess.tree);
+            pManager.AddTextParameter("Type to Change", "T", "New type for the graph", GH_ParamAccess.tree);
             pManager[1].Optional = true;
             // JSON string as tree (optional)
-            pManager.AddTextParameter("Attributes", "A", "Attributes as JSON string tree", GH_ParamAccess.tree);
+            pManager.AddTextParameter("Attributes to Change", "A", "Attributes as JSON string tree", GH_ParamAccess.tree);
             pManager[2].Optional = true;
         }
 
@@ -59,87 +59,34 @@ namespace Glab.C_Graph.Tools
 
             // Get input data
             if (!DA.GetDataTree(0, out graphTree)) return;
-            bool hasType = DA.GetDataTree(1, out typeTree) && !typeTree.IsEmpty;
-            bool hasAttributes = DA.GetDataTree(2, out attributesTree) && !attributesTree.IsEmpty;
+            DA.GetDataTree(1, out typeTree);
+            DA.GetDataTree(2, out attributesTree);
 
-            // Simplify input data tree using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            typeTree = TreeUtils.SimplifyTree(typeTree);
-            attributesTree = TreeUtils.SimplifyTree(attributesTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, typeTree, raiseEqualBranchItemCountError: true);
+            TreeUtils.ValidateTreeStructure(graphTree, attributesTree, raiseEqualBranchItemCountError: true);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> updatedGraphTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get branches for the current path
-                List<Graph> graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var types = TreeUtils.ExtractBranchData(typeTree, pathIndex);
+                var attributes = TreeUtils.ExtractBranchData(attributesTree, pathIndex);
 
-                List<string> types = new List<string>();
-                if (hasType)
-                {
-                    var branch = typeTree.get_Branch(path);
-                    if (branch != null)
-                    {
-                        types = branch.Cast<GH_String>().Select(ghString => ghString.Value).ToList();
-                    }
-                }
-
-                List<string> attributes = new List<string>();
-                if (hasAttributes)
-                {
-                    var branch = attributesTree.get_Branch(path);
-                    if (branch != null)
-                    {
-                        attributes = branch.Cast<GH_String>().Select(ghString => ghString.Value).ToList();
-                    }
-                }
-
-                // Check if the count of graphs and attributes are equal
-                if (attributes.Count > 0 && graphs.Count != attributes.Count)
-                {
-                    if (attributes.Count == 1)
-                    {
-                        // Repeat the single attribute for all graphs
-                        attributes = Enumerable.Repeat(attributes[0], graphs.Count).ToList();
-                    }
-                    else
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of graphs and attributes should be equal or attributes should have a single item.");
-                        return;
-                    }
-                }
-
-                // Check if the count of graphs and types are equal
-                if (types.Count > 0 && graphs.Count != types.Count)
-                {
-                    if (types.Count == 1)
-                    {
-                        // Repeat the single type for all graphs
-                        types = Enumerable.Repeat(types[0], graphs.Count).ToList();
-                    }
-                    else
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of graphs and types should be equal or types should have a single item.");
-                        return;
-                    }
-                }
-
-                // Iterate through each graph and corresponding attributes
+                // Process each graph
                 for (int i = 0; i < graphs.Count; i++)
                 {
                     // Deep copy the graph
                     Graph graphCopy = graphs[i].DeepCopy();
 
                     // Get the type and attributes for the current graph
-                    string type = types.Count > 0 ? types[i] : null;
-                    string attributesJson = attributes.Count > 0 ? attributes[i] : null;
+                    string type = types.Count > i ? types[i] : null;
+                    string attributesJson = attributes.Count > i ? attributes[i] : null;
 
                     // Update the graph's type
                     if (type != null)
@@ -158,7 +105,7 @@ namespace Glab.C_Graph.Tools
                     }
 
                     // Append the updated graph to the output tree
-                    updatedGraphTree.Append(new GH_ObjectWrapper(graphCopy), path);
+                    updatedGraphTree.Append(new GH_ObjectWrapper(graphCopy), graphTree.Paths[pathIndex]);
                 }
             }
 

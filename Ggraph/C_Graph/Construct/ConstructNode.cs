@@ -5,7 +5,6 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
-using Rhino.Geometry;
 using Glab.Utilities;
 
 namespace Glab.C_Graph.Construct
@@ -59,85 +58,39 @@ namespace Glab.C_Graph.Construct
             GH_Structure<GH_Point> pointsTree = new GH_Structure<GH_Point>();
             GH_Structure<GH_String> typesTree = new GH_Structure<GH_String>();
             GH_Structure<GH_String> attributesTree = new GH_Structure<GH_String>();
-            GH_Structure<IGH_Goo> linkedObjectsTree = new GH_Structure<IGH_Goo>();
+            GH_Structure<IGH_Goo> linkedObjectsTree = new();
 
             // Get input data
             if (!DA.GetDataTree(0, out pointsTree)) return;
-            bool hasTypes = DA.GetDataTree(1, out typesTree) && !typesTree.IsEmpty;
-            bool hasAttributes = DA.GetDataTree(2, out attributesTree) && !attributesTree.IsEmpty;
-            bool hasLinkedObjects = DA.GetDataTree(3, out linkedObjectsTree) && !linkedObjectsTree.IsEmpty;
+            DA.GetDataTree(1, out typesTree);
+            DA.GetDataTree(2, out attributesTree);
+            DA.GetDataTree(3, out linkedObjectsTree);
 
-            // Simplify input data trees using TreeUtils
-            pointsTree = TreeUtils.SimplifyTree(pointsTree);
-            if (hasTypes)
-            {
-                typesTree = TreeUtils.SimplifyTree(typesTree);
-            }
-            if (hasAttributes)
-            {
-                attributesTree = TreeUtils.SimplifyTree(attributesTree);
-            }
-            if (hasLinkedObjects)
-            {
-                linkedObjectsTree = TreeUtils.SimplifyTree(linkedObjectsTree);
-            }
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(pointsTree, pointsTree); // Validate pointsTree against itself
+            TreeUtils.ValidateTreeStructure(pointsTree, typesTree, repeatLast: true, defaultValue: new GH_String("unset"));
+            TreeUtils.ValidateTreeStructure(pointsTree, attributesTree, repeatLast: true);
+            TreeUtils.ValidateTreeStructure(pointsTree, linkedObjectsTree, raiseEqualBranchItemCountError: true);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> nodesTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in pointsTree.Paths)
+            for (int pathIndex = 0; pathIndex < pointsTree.Paths.Count; pathIndex++)
             {
-                // Get points from the current branch
-                var points = pointsTree.get_Branch(path).Cast<GH_Point>().Select(ghPoint => ghPoint.Value).ToList();
-                var types = hasTypes ? typesTree.get_Branch(path).Cast<GH_String>().Select(ghString => ghString.Value).ToList() : new List<string>();
-                var attributes = hasAttributes ? attributesTree.get_Branch(path).Cast<GH_String>().Select(ghString => ghString.Value).ToList() : new List<string>();
-                var linkedObjects = hasLinkedObjects ? linkedObjectsTree.get_Branch(path).Cast<IGH_Goo>().ToList() : new List<IGH_Goo>();
-
-                // Check if the count of points and types are equal
-                if (hasTypes && points.Count != types.Count)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of points and types should be equal.");
-                    return;
-                }
-
-                // Check if the count of points and attributes are equal
-                if (hasAttributes && points.Count != attributes.Count)
-                {
-                    if (attributes.Count == 1)
-                    {
-                        // Repeat the single attribute for all points
-                        attributes = Enumerable.Repeat(attributes[0], points.Count).ToList();
-                    }
-                    else
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of points and attributes should be equal or attributes should have a single item.");
-                        return;
-                    }
-                }
-
-                // Check if the count of points and linked objects are equal
-                if (hasLinkedObjects && points.Count != linkedObjects.Count)
-                {
-                    if (linkedObjects.Count == 1)
-                    {
-                        // Repeat the single linked object for all points
-                        linkedObjects = Enumerable.Repeat(linkedObjects[0], points.Count).ToList();
-                    }
-                    else
-                    {
-                        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The count of points and linked objects should be equal or linked objects should have a single item.");
-                        return;
-                    }
-                }
+                // Extract branches for the current path
+                var points = TreeUtils.ExtractBranchData(pointsTree, pathIndex);
+                var types = TreeUtils.ExtractBranchData(typesTree, pathIndex);
+                var attributes = TreeUtils.ExtractBranchData(attributesTree, pathIndex);
+                var linkedObjects = TreeUtils.ExtractBranchData<IGH_Goo>(linkedObjectsTree, pathIndex);
 
                 // Create nodes from points, types, attributes, and linked objects
                 for (int i = 0; i < points.Count; i++)
                 {
                     var point = points[i];
-                    var type = hasTypes && i < types.Count ? types[i] : null;
-                    var attributeJson = hasAttributes && i < attributes.Count ? attributes[i] : null;
-                    var linkedObject = hasLinkedObjects && i < linkedObjects.Count ? linkedObjects[i] : null;
+                    var type = i < types.Count ? types[i] : null;
+                    var attributeJson = i < attributes.Count ? attributes[i] : null;
+                    var linkedObject = i < linkedObjects.Count ? linkedObjects[i] : null;
 
                     // Create node
                     GNode node = new GNode(point, type);
@@ -162,7 +115,7 @@ namespace Glab.C_Graph.Construct
                     GH_ObjectWrapper nodeWrapper = new GH_ObjectWrapper(node);
 
                     // Append the node to the output tree at the current path
-                    nodesTree.Append(nodeWrapper, path);
+                    nodesTree.Append(nodeWrapper, pointsTree.Paths[pathIndex]);
                 }
             }
 

@@ -58,17 +58,10 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(1, out startNodeTree)) return;
             if (!DA.GetDataTree(2, out endNodeTree)) return;
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            startNodeTree = TreeUtils.SimplifyTree(startNodeTree);
-            endNodeTree = TreeUtils.SimplifyTree(endNodeTree);
-
-            // Check if the number of branches in the input trees is the same
-            if (graphTree.Branches.Count != startNodeTree.Branches.Count || graphTree.Branches.Count != endNodeTree.Branches.Count)
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The number of branches in the input trees must be the same.");
-                return;
-            }
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, startNodeTree);
+            TreeUtils.ValidateTreeStructure(graphTree, endNodeTree);
 
             // Initialize output data structures
             GH_Structure<GH_ObjectWrapper> pathNodesTree = new GH_Structure<GH_ObjectWrapper>();
@@ -76,55 +69,35 @@ namespace Glab.C_Graph.Tools
             GH_Structure<GH_Number> pathLengthTree = new GH_Structure<GH_Number>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get graphs from the current branch
-                var graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var startNodes = TreeUtils.ExtractBranchData<GNode>(startNodeTree, pathIndex);
+                var endNodes = TreeUtils.ExtractBranchData<GNode>(endNodeTree, pathIndex);
 
-                // Get start nodes from the corresponding branch in the start node tree
-                var startNodes = startNodeTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
+                // Check if the number of start nodes, and end nodes match
+                if (startNodes.Count != endNodes.Count)
                 {
-                    GNode node = null;
-                    goo.CastTo(out node);
-                    return node;
-                }).ToList();
-
-                // Get end nodes from the corresponding branch in the end node tree
-                var endNodes = endNodeTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    GNode node = null;
-                    goo.CastTo(out node);
-                    return node;
-                }).ToList();
-
-                // Check if the number of graphs, start nodes, and end nodes match
-                if (graphs.Count != startNodes.Count || graphs.Count != endNodes.Count)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The number of graphs, start nodes, and end nodes in the branch must be the same.");
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "The number of start nodes and end nodes in the branch must be the same.");
                     return;
                 }
 
-                // Iterate through each graph
-                for (int i = 0; i < graphs.Count; i++)
-                {
-                    var graph = graphs[i];
+                for (int i = 0; i < startNodes.Count; i++)
+                { 
                     var startNode = startNodes[i];
                     var endNode = endNodes[i];
 
                     // Call the FindShortestPath method
-                    GraphUtils.FindShortestPath(graph, startNode, endNode, out List<GNode> pathNodes, out List<GEdge> pathEdges, out double pathLength);
+                    GraphUtils.FindShortestPath(graphs[0], startNode, endNode, out List<GNode> pathNodes, out List<GEdge> pathEdges, out double pathLength);
 
                     // Append the path nodes, edges, and length to the output trees
-                    var subPath = path.AppendElement(i);
+                    var subPath = graphTree.Paths[pathIndex].AppendElement(i);
                     pathNodesTree.AppendRange(pathNodes.Select(n => new GH_ObjectWrapper(n)), subPath);
                     pathEdgesTree.AppendRange(pathEdges.Select(e => new GH_ObjectWrapper(e)), subPath);
                     pathLengthTree.Append(new GH_Number(pathLength), subPath);
                 }
+
             }
 
             // Set output data

@@ -4,8 +4,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
-using Rhino.Geometry;
-using Neo4j.Driver;
 
 namespace Glab.C_Graph.Neo4j
 {

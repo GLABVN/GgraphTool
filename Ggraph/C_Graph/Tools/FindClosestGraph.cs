@@ -54,44 +54,32 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(0, out graphTree)) return;
             if (!DA.GetDataTree(1, out pointTree)) return;
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            pointTree = TreeUtils.SimplifyTree(pointTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, pointTree);
 
             // Initialize output data structures
             var closestGraphsTree = new GH_Structure<GH_ObjectWrapper>();
             var minDistancesTree = new GH_Structure<GH_Number>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get graphs from the current branch
-                var graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var testPoints = TreeUtils.ExtractBranchData(pointTree, pathIndex);
 
-                // Get test points from the corresponding branch in the point tree
-                var testPoints = pointTree.get_Branch(path).Cast<GH_Point>().Select(ghPoint => ghPoint.Value).ToList();
-
-                // Call the FindClosestGraphs method
+                // Use the GraphUtils.FindClosestGraph method
                 List<double> minDistances;
-                var closestGraphsDict = GraphUtils.FindClosestGraphs(graphs, testPoints, out minDistances);
+                var closestGraphs = GraphUtils.FindClosestGraph(graphs, testPoints, out minDistances);
 
-                // Extract the graphs from the dictionary
-                var closestGraphs = closestGraphsDict.Values.ToList();
-
-                // Convert the closestGraphs list to a list of GH_ObjectWrapper
-                var closestGraphsList = closestGraphs.Select(graph => new GH_ObjectWrapper(graph)).ToList();
-
-                // Convert the minDistances list to a list of GH_Number
-                var minDistancesList = minDistances.Select(d => new GH_Number(d)).ToList();
-
-                // Append the results to the output trees
-                closestGraphsTree.AppendRange(closestGraphsList, path);
-                minDistancesTree.AppendRange(minDistancesList, path);
+                // Append results to the output trees
+                for (int pointIndex = 0; pointIndex < testPoints.Count; pointIndex++)
+                {
+                    var subPath = graphTree.Paths[pathIndex].AppendElement(pointIndex);
+                    closestGraphsTree.Append(new GH_ObjectWrapper(closestGraphs[testPoints[pointIndex]]), subPath);
+                    minDistancesTree.Append(new GH_Number(minDistances[pointIndex]), subPath);
+                }
             }
 
             // Set output data

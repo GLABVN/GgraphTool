@@ -30,7 +30,7 @@ namespace Glab.C_Graph.Tools
             pManager.AddIntegerParameter("Valence To Prune", "V", "Valence of nodes to prune", GH_ParamAccess.tree, 1);
             pManager.AddTextParameter("Type To Exclude", "T", "Type of nodes to exclude", GH_ParamAccess.tree);
             pManager.AddTextParameter("Attributes To Exclude", "A", "JSON string of attributes to exclude", GH_ParamAccess.tree);
-            pManager.AddBooleanParameter("Prune Type Null Only", "P", "Prune nodes with type = null only", GH_ParamAccess.item, true);
+            pManager.AddBooleanParameter("Prune Type Unset Only", "P", "Prune nodes with type = null only", GH_ParamAccess.item, true);
 
             // Make all parameters except Graphs and PruneNullOnly optional
             pManager[1].Optional = true;
@@ -57,77 +57,44 @@ namespace Glab.C_Graph.Tools
             GH_Structure<GH_Integer> valenceTree = new GH_Structure<GH_Integer>();
             GH_Structure<GH_String> typeTree = new GH_Structure<GH_String>();
             GH_Structure<GH_String> attributesTree = new GH_Structure<GH_String>();
-            bool pruneNullOnly = true;
+            bool pruneUnsetTypeOnly = true;
 
             // Get input data
             if (!DA.GetDataTree(0, out graphTree)) return;
-            bool hasValence = DA.GetDataTree(1, out valenceTree) && !valenceTree.IsEmpty;
-            bool hasType = DA.GetDataTree(2, out typeTree) && !typeTree.IsEmpty;
-            bool hasAttributes = DA.GetDataTree(3, out attributesTree) && !attributesTree.IsEmpty;
-            DA.GetData(4, ref pruneNullOnly);
+            DA.GetDataTree(1, out valenceTree);
+            DA.GetDataTree(2, out typeTree);
+            DA.GetDataTree(3, out attributesTree);
+            DA.GetData(4, ref pruneUnsetTypeOnly);
 
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
-            if (hasValence) valenceTree = TreeUtils.SimplifyTree(valenceTree);
-            if (hasType) typeTree = TreeUtils.SimplifyTree(typeTree);
-            if (hasAttributes) attributesTree = TreeUtils.SimplifyTree(attributesTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
+            TreeUtils.ValidateTreeStructure(graphTree, valenceTree, repeatLast: true, defaultValue: new GH_Integer(1));
+            TreeUtils.ValidateTreeStructure(graphTree, typeTree, repeatLast: true);
+            TreeUtils.ValidateTreeStructure(graphTree, attributesTree, repeatLast: true);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> outputTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input tree
-            foreach (GH_Path path in graphTree.Paths)
+            for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
-                // Get branches for the current path
-                List<Graph> graphs = graphTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
+                // Extract branches for the current path
+                var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
+                var valences = TreeUtils.ExtractBranchData(valenceTree, pathIndex);
+                var types = TreeUtils.ExtractBranchData(typeTree, pathIndex);
+                var attributes = TreeUtils.ExtractBranchData(attributesTree, pathIndex);
+
+                // Process each graph in the current branch
+                for (int i = 0; i < graphs.Count; i++)
                 {
-                    Graph graph = null;
-                    goo.CastTo(out graph);
-                    return graph;
-                }).ToList();
-
-                // Get branches for all inputs for this path
-                var graphBranch = graphs;  // We already have this processed
-                var valenceBranch = hasValence ? valenceTree.get_Branch(path) : null;
-                var typeBranch = hasType ? typeTree.get_Branch(path) : null;
-                var attributesBranch = hasAttributes ? attributesTree.get_Branch(path) : null;
-
-                // Get the maximum count to iterate through
-                int maxCount = graphBranch.Count;
-                if (hasValence) maxCount = Math.Min(maxCount, valenceBranch.Count);
-                if (hasType) maxCount = Math.Min(maxCount, typeBranch.Count);
-                if (hasAttributes) maxCount = Math.Min(maxCount, attributesBranch.Count);
-
-                // Process each item in parallel
-                for (int i = 0; i < maxCount; i++)
-                {
-                    // Get the graph to process
-                    var graph = graphBranch[i];
-
-                    // Get matching parameters from the same index
-                    int valence = 1;
-                    if (hasValence && i < valenceBranch.Count)
-                    {
-                        valence = (valenceBranch[i] as GH_Integer).Value;
-                    }
-
-                    string type = null;
-                    if (hasType && i < typeBranch.Count)
-                    {
-                        type = (typeBranch[i] as GH_String).Value;
-                        if (string.IsNullOrEmpty(type)) type = null;
-                    }
-
-                    string jsonString = null;
-                    if (hasAttributes && i < attributesBranch.Count)
-                    {
-                        jsonString = (attributesBranch[i] as GH_String).Value;
-                        if (string.IsNullOrEmpty(jsonString)) jsonString = null;
-                    }
+                    var graph = graphs[i];
+                    var valence = valences[i];
+                    var type = types[i];
+                    var jsonString = attributes[i];
 
                     // Prune the graph with matching parameters
-                    var prunedGraph = GraphUtils.PruneGraphByType(graph, type, jsonString, valence, pruneNullOnly);
-                    outputTree.Append(new GH_ObjectWrapper(prunedGraph), path);
+                    var prunedGraph = GraphUtils.PruneGraphByType(graph, type, jsonString, valence, pruneUnsetTypeOnly);
+                    outputTree.Append(new GH_ObjectWrapper(prunedGraph), graphTree.Paths[pathIndex]);
                 }
             }
 

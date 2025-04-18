@@ -4,8 +4,7 @@ using System.Collections.Generic;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Rhino.Geometry;
-using Rhino;
+using Newtonsoft.Json;
 using Glab.Utilities;
 
 namespace Glab.C_Graph
@@ -34,6 +33,9 @@ namespace Glab.C_Graph
             pManager.AddGenericParameter("Edges", "E", "Input edges as a tree", GH_ParamAccess.tree);
             // Boolean parameter to shatter edges
             pManager.AddBooleanParameter("Shatter Edge?", "D", "If true, isolated points on an edge will shatter the edge and add the node to the graph", GH_ParamAccess.item, true);
+            // Input attributes as JSON string tree
+            pManager.AddTextParameter("Attributes", "A", "Attributes as JSON string tree to set for each graph", GH_ParamAccess.tree);
+            pManager[3].Optional = true;
         }
 
         /// <summary>
@@ -57,16 +59,19 @@ namespace Glab.C_Graph
             // Initialize input variables
             GH_Structure<IGH_Goo> nodesTree = new GH_Structure<IGH_Goo>();
             GH_Structure<IGH_Goo> edgesTree = new GH_Structure<IGH_Goo>();
+            GH_Structure<GH_String> attributesTree = new GH_Structure<GH_String>();
             bool shatterEdge = false;
 
             // Get input data
-            bool hasNodes = DA.GetDataTree(0, out nodesTree) && !nodesTree.IsEmpty;
+            if (!DA.GetDataTree(0, out nodesTree)) return;
             if (!DA.GetDataTree(1, out edgesTree)) return;
             if (!DA.GetData(2, ref shatterEdge)) return;
+            DA.GetDataTree(3, out attributesTree);
 
-            // Simplify input data trees using TreeUtils
-            nodesTree = TreeUtils.SimplifyTree(nodesTree);
-            edgesTree = TreeUtils.SimplifyTree(edgesTree);
+            // Validate input trees
+            TreeUtils.ValidateTreeStructure(edgesTree, edgesTree); // Validate edgesTree against itself
+            TreeUtils.ValidateTreeStructure(edgesTree, nodesTree);
+            TreeUtils.ValidateTreeStructure(edgesTree, attributesTree);
 
             // Initialize output data structures
             GH_Structure<GH_ObjectWrapper> graphsTree = new GH_Structure<GH_ObjectWrapper>();
@@ -74,26 +79,22 @@ namespace Glab.C_Graph
             GH_Structure<GH_ObjectWrapper> isolatedEdgesTree = new GH_Structure<GH_ObjectWrapper>();
 
             // Iterate through paths in the input trees
-            foreach (GH_Path path in edgesTree.Paths)
+            for (int pathIndex = 0; pathIndex < edgesTree.Paths.Count; pathIndex++)
             {
-                // Get edges from the current branch
-                var edges = edgesTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
-                {
-                    GEdge edge = null;
-                    goo.CastTo(out edge);
-                    return edge;
-                }).Where(edge => edge != null).ToList();
+                // Extract branches for the current path
+                var edges = TreeUtils.ExtractBranchData<GEdge>(edgesTree, pathIndex);
+                var nodes = TreeUtils.ExtractBranchData<GNode>(nodesTree, pathIndex);
+                var attributes = TreeUtils.ExtractBranchData(attributesTree, pathIndex);
 
-                List<GNode> nodes = new List<GNode>();
-                if (hasNodes)
+                // Parse attributes if available
+                Dictionary<string, object> attributeDict = null;
+                if (attributes.Count > 0)
                 {
-                    // Get nodes from the current branch
-                    nodes = nodesTree.get_Branch(path).Cast<IGH_Goo>().Select(goo =>
+                    var attributeJson = attributes[0]; // Use the first attribute JSON string
+                    if (!string.IsNullOrEmpty(attributeJson))
                     {
-                        GNode node = null;
-                        goo.CastTo(out node);
-                        return node;
-                    }).Where(node => node != null).ToList();
+                        attributeDict = JsonConvert.DeserializeObject<Dictionary<string, object>>(attributeJson);
+                    }
                 }
 
                 // Create graphs using the static method with isolated elements
@@ -102,7 +103,7 @@ namespace Glab.C_Graph
                 // Add runtime message if more than one graph is formed
                 if (graphs.Count > 1)
                 {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, $"More than one graph formed at path {path}: {graphs.Count} graphs.");
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, $"More than one graph formed at path {edgesTree.Paths[pathIndex]}: {graphs.Count} graphs.");
                 }
 
                 // Add runtime message for isolated nodes and edges
@@ -111,25 +112,34 @@ namespace Glab.C_Graph
                 if (totalIsolatedNodes > 0 || totalIsolatedEdges > 0)
                 {
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                        $"Path {path}: Found {totalIsolatedNodes} isolated nodes and {totalIsolatedEdges} isolated edges");
+                        $"Path {edgesTree.Paths[pathIndex]}: Found {totalIsolatedNodes} isolated nodes and {totalIsolatedEdges} isolated edges");
                 }
 
                 // Process each graph
                 foreach (var graph in graphs)
                 {
-                    graphsTree.Append(new GH_ObjectWrapper(graph), path);
+                    // Set attributes if provided
+                    if (attributeDict != null)
+                    {
+                        foreach (var attribute in attributeDict)
+                        {
+                            graph.Attributes[attribute.Key] = attribute.Value;
+                        }
+                    }
+
+                    graphsTree.Append(new GH_ObjectWrapper(graph), edgesTree.Paths[pathIndex]);
                 }
 
                 // Add isolated nodes to output
                 foreach (var node in isolatedNodes)
                 {
-                    isolatedNodesTree.Append(new GH_ObjectWrapper(node), path);
+                    isolatedNodesTree.Append(new GH_ObjectWrapper(node), edgesTree.Paths[pathIndex]);
                 }
 
                 // Add isolated edges to output
                 foreach (var edge in isolatedEdges)
                 {
-                    isolatedEdgesTree.Append(new GH_ObjectWrapper(edge), path);
+                    isolatedEdgesTree.Append(new GH_ObjectWrapper(edge), edgesTree.Paths[pathIndex]);
                 }
             }
 

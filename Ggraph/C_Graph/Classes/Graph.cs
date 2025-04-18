@@ -49,14 +49,13 @@ namespace Glab.C_Graph
 
         // Auto-generated GUID for the graph
         public Guid GGUID { get; private set; }
-        public string Type { get; set; }
+        public string Type { get; set; } = "unset";
         public bool IsGraphFullyConnected => CheckIfGraphFullyConnected(this);
 
         // Default constructor
         public Graph()
         {
             GGUID = Guid.NewGuid();
-            Type = null;
         }
 
         // Method to set node IDs based on the number of nodes in the graph

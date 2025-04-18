@@ -6,8 +6,6 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
-using Rhino.DocObjects;
-using Rhino;
 using Glab.Utilities;
 using Newtonsoft.Json;
 
@@ -111,9 +109,6 @@ namespace Glab.C_Graph.Visualize
 
             // Get the show edge as arc flag
             DA.GetData(6, ref showEdgeAsArc);
-
-            // Simplify input data trees using TreeUtils
-            graphTree = TreeUtils.SimplifyTree(graphTree);
 
             // Clear previous data
             edgeCurves.Clear();

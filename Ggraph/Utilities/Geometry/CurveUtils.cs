@@ -7,6 +7,7 @@ using Rhino.UI.Theme;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -110,6 +111,12 @@ namespace Glab.Utilities
 
         public static List<Plane> GetLineSegmentPatternPlane(Line baseLine, List<double> lengths, out double finalSumLength, bool flipStart = false, bool extendLine = false, bool reachEnd = false, double shiftDistance = 0.00)
         {
+            // TODO fix flip
+            if (flipStart)
+            { 
+                baseLine = FlipLine(baseLine);
+            }
+
             List<Plane> planes = new List<Plane>();
             double totalLength = lengths.Sum();
             double lineLength = baseLine.Length;
@@ -138,11 +145,11 @@ namespace Glab.Utilities
                     Vector3d xAxis = segment.Direction;
                     xAxis.Unitize();
 
-                    if (flipStart)
-                    {
-                        // Flip the xAxis vector
-                        xAxis = -xAxis;
-                    }
+                    //if (flipStart)
+                    //{
+                    //    // Flip the xAxis vector
+                    //    xAxis = -xAxis;
+                    //}
 
                     Point3d midpoint = segment.PointAt(0.5);
                     Vector3d zAxis = new Vector3d(0, 0, 1);
@@ -735,10 +742,10 @@ namespace Glab.Utilities
                 {
                     foreach (var regionCurve in regionCurves)
                     {
-                        if (!regionCurve.IsClosed)
-                        {
-                            throw new InvalidOperationException("One or more region curves are not closed.");
-                        }
+                        //if (!regionCurve.IsClosed)
+                        //{
+                        //    throw new InvalidOperationException("One or more region curves are not closed.");
+                        //}
 
                         outerRegions.Add(regionCurve);
                     }
@@ -1387,16 +1394,67 @@ namespace Glab.Utilities
                 Index = index;
             }
         }
-        public static void DrawRoadFromGraph(Graph graph, Curve siteBoundary, out List<Curve> RoadLine, out List<Curve> Pavement, out List<Curve> Landscape)
+
+        // Sort list Concurrent-lines by angles
+        public static (List<Line> sortedLines, List<int> sortedIndices) SortLinesByAngle(List<Line> lines)
+        {
+            if (lines == null || !lines.Any())
+            {
+                throw new ArgumentNullException(nameof(lines), "SortLinesByAngle: The provided list of lines is null or empty.");
+            }
+
+            // If there's only one line, return it as is
+            if (lines.Count == 1)
+            {
+                return (lines, new List<int> { 0 });
+            }
+
+            // Get the direction vector of the first line
+            Vector3d referenceDirection = lines[0].Direction;
+            referenceDirection.Unitize();
+
+            // Create a list of tuples containing the line, its angle with the reference direction, and its original index
+            var lineAngles = new List<(Line line, double angle, int index)>();
+            lineAngles.Add((lines[0], 0, 0)); // First line has angle 0
+
+            // Calculate angles for remaining lines
+            for (int i = 1; i < lines.Count; i++)
+            {
+                Vector3d currentDirection = lines[i].Direction;
+                currentDirection.Unitize();
+
+                // Calculate angle between vectors (in radians)
+                double angle = Vector3d.VectorAngle(referenceDirection, currentDirection);
+
+                // Get the sign of the angle using cross product
+                Vector3d cross = Vector3d.CrossProduct(referenceDirection, currentDirection);
+                if (cross.Z < 0)
+                {
+                    angle = 2 * Math.PI - angle;
+                }
+
+                lineAngles.Add((lines[i], angle, i));
+            }
+
+            // Sort lines by angle
+            var sortedLineAngles = lineAngles.OrderBy(x => x.angle).ToList();
+
+            // Extract sorted lines and their original indices
+            var sortedLines = sortedLineAngles.Select(x => x.line).ToList();
+            var sortedIndices = sortedLineAngles.Select(x => x.index).ToList();
+
+            return (sortedLines, sortedIndices);
+        }
+        public static void ConstructLandscapeFromGraph(Graph graph, Curve siteBoundary, List<Curve> buildingCoverBoundaries, List<Curve> spaceBoundaries, out List<Curve> RoadLine, out List<Curve> Pavement, out List<Curve> Green)
         {
             RoadLine = new List<Curve>();
             Pavement = new List<Curve>();
-            Landscape = new List<Curve>();
+            Green = new List<Curve>();
 
             // Check if the graph is null or has no edges
             if (graph == null || graph.QuickGraphObj == null || !graph.QuickGraphObj.Edges.Any())
             {
-                throw new ArgumentNullException(nameof(graph), "DrawRoadFromGraph: The provided graph is null or has no edges.");
+                throw new ArgumentNullException(nameof(graph), "ConstructLandscapeFromGraph: The provided graph is null or has no edges.");
             }
 
             // Convert siteBoundary to polyline with tolerance = 0.01
@@ -1413,13 +1471,13 @@ namespace Glab.Utilities
             {
                 if (edge == null || !edge.Attributes.ContainsKey("Width"))
                 {
-                    throw new ArgumentException("DrawRoadFromGraph: Each edge must have a 'Width' key with a valid value.", nameof(graph));
+                    throw new ArgumentException("ConstructLandscapeFromGraph: Each edge must have a 'Width' key with a valid value.", nameof(graph));
                 }
 
                 double width = Convert.ToDouble(edge.Attributes["Width"]);
                 if (width <= 0)
                 {
-                    throw new ArgumentException("DrawRoadFromGraph: The 'Width' value must be greater than zero.", nameof(graph));
+                    throw new ArgumentException("ConstructLandscapeFromGraph: The 'Width' value must be greater than zero.", nameof(graph));
                 }
 
                 edgeCurves.Add(edge.EdgeCurve);
@@ -1558,7 +1616,7 @@ namespace Glab.Utilities
             RoadLine.Clear();
             RoadLine.AddRange(simplifiedCurves);
 
-            // Create Pavement from outer RoadLine
+            // Create Pavement Regions from outer RoadLine
             /// Get region difference between siteBoundary and outerRoadLine
             var regionDifference = Curve.CreateBooleanDifference(sitePolyline.ToNurbsCurve(), simplifiedCurves, 0.01);
 
@@ -1572,18 +1630,53 @@ namespace Glab.Utilities
                     offsetSimplifiedCurves.AddRange(offsetCurves);
                 }
             }
-            ///Get region intersection between regionDifference and offset
+            /// Get region intersection between regionDifference and offset
             foreach (var curve in regionDifference)
             {
                 var regionIntersection = Curve.CreateBooleanIntersection(curve, offsetSimplifiedCurves.First(), 0.01);
                 Pavement.AddRange(regionIntersection);
             }
 
-            // Get region difference between siteBoundary and offsetSimplifiedCurves
-            var LandscaperegionDifference = Curve.CreateBooleanDifference(sitePolyline.ToNurbsCurve(), offsetSimplifiedCurves.First(), 0.01);
-            if (LandscaperegionDifference != null)
+            // Get region difference between siteBoundary with offsetSimplifiedCurves & optional spaceBoundaries
+            var allConstraints = new List<Curve>(offsetSimplifiedCurves);
+
+            // Add building cover boundaries as constraints if provided
+            if (buildingCoverBoundaries != null && buildingCoverBoundaries.Any())
             {
-                Landscape.AddRange(LandscaperegionDifference);
+                allConstraints.AddRange(buildingCoverBoundaries);
+            }
+
+            // Add space boundaries as constraints if provided
+            if (spaceBoundaries != null && spaceBoundaries.Any())
+            {
+                allConstraints.AddRange(spaceBoundaries);
+            }
+
+            // Create combined constraints for boolean difference
+            var combinedConstraints = Curve.CreateBooleanUnion(allConstraints, 0.01);
+            if (combinedConstraints != null && combinedConstraints.Length > 0)
+            {
+                var LandscaperegionDifference = Curve.CreateBooleanDifference(
+                    sitePolyline.ToNurbsCurve(),
+                    combinedConstraints,
+                    0.01
+                );
+                if (LandscaperegionDifference != null)
+                {
+                    Green.AddRange(LandscaperegionDifference);
+                }
+            }
+            else
+            {
+                var LandscaperegionDifference = Curve.CreateBooleanDifference(
+                    sitePolyline.ToNurbsCurve(),
+                    offsetSimplifiedCurves,
+                    0.01
+                );
+                if (LandscaperegionDifference != null)
+                {
+                    Green.AddRange(LandscaperegionDifference);
+                }
             }
 
 
@@ -1699,56 +1792,130 @@ namespace Glab.Utilities
             RoadLine.AddRange(holeRegionsCurve);
         }
 
-        // Sort list Concurrent-lines by angles
-        public static (List<Line> sortedLines, List<int> sortedIndices) SortLinesByAngle(List<Line> lines)
+        /// <summary>
+        /// Creates a rectangle representing the bounding box of all input curves with optional padding.
+        /// </summary>
+        /// <param name="curves">Collection of curves to calculate bounding box for.</param>
+        /// <param name="padding">Optional padding percentage (0.05 = 5% padding on each side).</param>
+        /// <returns>A Rectangle representing the bounding box of all curves.</returns>
+        public static Rectangle GetBoundingRectangleOfMultipleCurves(List<Curve> curves)
         {
-            if (lines == null || !lines.Any())
+            if (curves == null || !curves.Any())
             {
-                throw new ArgumentNullException(nameof(lines), "SortLinesByAngle: The provided list of lines is null or empty.");
+                throw new ArgumentNullException(nameof(curves), "GetBoundingRectangleOfMultipleCurves: The provided list of curves is null or empty.");
             }
 
-            // If there's only one line, return it as is
-            if (lines.Count == 1)
+            // Initialize with the bounding box of the first curve
+            BoundingBox boundingBox = curves[0].GetBoundingBox(true);
+
+            // Expand the bounding box to include all curves
+            foreach (var curve in curves.Skip(1))
             {
-                return (lines, new List<int> { 0 });
+                boundingBox.Union(curve.GetBoundingBox(true));
             }
 
-            // Get the direction vector of the first line
-            Vector3d referenceDirection = lines[0].Direction;
-            referenceDirection.Unitize();
+            // Create rectangle with padding
+            return new Rectangle(
+                (int)(boundingBox.Min.X),
+                (int)(boundingBox.Min.Y),
+                (int)(boundingBox.Max.X - boundingBox.Min.X),
+                (int)(boundingBox.Max.Y - boundingBox.Min.Y)
+            );
+        }
 
-            // Create a list of tuples containing the line, its angle with the reference direction, and its original index
-            var lineAngles = new List<(Line line, double angle, int index)>();
-            lineAngles.Add((lines[0], 0, 0)); // First line has angle 0
-
-            // Calculate angles for remaining lines
-            for (int i = 1; i < lines.Count; i++)
+        /// <summary>
+        /// Converts a System.Drawing.Rectangle to a Rhino.Geometry.Curve (specifically a PolylineCurve).
+        /// </summary>
+        /// <param name="rectangle">The rectangle to convert.</param>
+        /// <returns>A closed curve representing the rectangle.</returns>
+        public static Curve RectangleToCurve(Rectangle rectangle)
+        {
+            if (rectangle.IsEmpty)
             {
-                Vector3d currentDirection = lines[i].Direction;
-                currentDirection.Unitize();
+                throw new ArgumentException("RectangleToCurve: The provided rectangle is empty.", nameof(rectangle));
+            }
 
-                // Calculate angle between vectors (in radians)
-                double angle = Vector3d.VectorAngle(referenceDirection, currentDirection);
+            // Create a polyline from the rectangle vertices
+            Polyline polyline = new Polyline();
+            polyline.Add(new Point3d(rectangle.Left, rectangle.Top, 0));
+            polyline.Add(new Point3d(rectangle.Right, rectangle.Top, 0));
+            polyline.Add(new Point3d(rectangle.Right, rectangle.Bottom, 0));
+            polyline.Add(new Point3d(rectangle.Left, rectangle.Bottom, 0));
+            polyline.Add(new Point3d(rectangle.Left, rectangle.Top, 0)); // Close the polyline
 
-                // Get the sign of the angle using cross product
-                Vector3d cross = Vector3d.CrossProduct(referenceDirection, currentDirection);
-                if (cross.Z < 0)
+            // Convert the polyline to a curve
+            return polyline.ToNurbsCurve();
+        }
+
+        // method to orient a curve from source to target plane
+        public static Curve OrientCurve(Curve curve, Plane sourcePlane, Plane targetPlane)
+        {
+            if (curve == null)
+            {
+                throw new ArgumentNullException(nameof(curve), "OrientCurve: The provided curve is null.");
+            }
+
+            // Check if the curve is a polyline
+            Polyline polyline;
+            if (curve.TryGetPolyline(out polyline))
+            {
+                // Orient the polyline
+                Transform xform = Transform.PlaneToPlane(sourcePlane, targetPlane);
+                polyline.Transform(xform);
+
+                // Convert the oriented polyline back to a curve
+                Curve orientedCurve = polyline.ToNurbsCurve();
+
+                // Check if the closed status of the oriented curve matches the original curve
+                if (orientedCurve.IsClosed != curve.IsClosed)
                 {
-                    angle = 2 * Math.PI - angle;
+                    throw new InvalidOperationException("OrientCurve: The resulting curve does not have the same closed status as the original curve.");
                 }
 
-                lineAngles.Add((lines[i], angle, i));
+                return orientedCurve;
+            }
+            else
+            {
+                // If not a polyline, proceed with the original logic
+                Transform xform = Transform.PlaneToPlane(sourcePlane, targetPlane);
+                Curve orientedCurve = curve.DuplicateCurve();
+                orientedCurve.Transform(xform);
+
+                // Check if the closed status of the oriented curve matches the original curve
+                if (orientedCurve.IsClosed != curve.IsClosed)
+                {
+                    throw new InvalidOperationException("OrientCurve: The resulting curve does not have the same closed status as the original curve.");
+                }
+
+                return orientedCurve;
+            }
+        }
+        public static Plane GetCurveXYBottomCenter(List<Curve> curve)
+        {
+            
+            // Step 1: Get the bounding box of the curve
+
+            Rectangle rect = GetBoundingRectangleOfMultipleCurves(curve);
+            BoundingBox boundingBox = new BoundingBox(
+                new Point3d(rect.Left, rect.Top, 0),
+                new Point3d(rect.Right, rect.Bottom, 0)
+            );
+            if (!boundingBox.IsValid)
+            {
+                throw new InvalidOperationException("GetCurveXYBottomCenter: The bounding box of the curve is invalid.");
             }
 
-            // Sort lines by angle
-            var sortedLineAngles = lineAngles.OrderBy(x => x.angle).ToList();
+            // Step 2: Calculate the bottom center point of the bounding rectangle
+            double width = boundingBox.Max.X - boundingBox.Min.X;
+            double height = boundingBox.Max.Y - boundingBox.Min.Y;
+            Point3d bottomCenter = new Point3d(boundingBox.Min.X + (width / 2), boundingBox.Min.Y, boundingBox.Min.Z);
 
-            // Extract sorted lines and their original indices
-            var sortedLines = sortedLineAngles.Select(x => x.line).ToList();
-            var sortedIndices = sortedLineAngles.Select(x => x.index).ToList();
+            // Step 3: Create a plane using the bottom center point
+            Plane plane = new Plane(bottomCenter, Vector3d.XAxis, Vector3d.YAxis);
 
-            return (sortedLines, sortedIndices);
+            return plane;
         }
+
 
         //public static void DrawParking (Curve Boundary,List<Curve> Constrain, out List<Curve> parkingCurves)
         //{
