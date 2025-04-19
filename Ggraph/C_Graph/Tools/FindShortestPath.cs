@@ -59,9 +59,9 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(2, out endNodeTree)) return;
 
             // Validate input trees
-            TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
-            TreeUtils.ValidateTreeStructure(graphTree, startNodeTree);
-            TreeUtils.ValidateTreeStructure(graphTree, endNodeTree);
+            graphTree = TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
+            startNodeTree = TreeUtils.ValidateTreeStructure(graphTree, startNodeTree);
+            endNodeTree = TreeUtils.ValidateTreeStructure(graphTree, endNodeTree);
 
             // Initialize output data structures
             GH_Structure<GH_ObjectWrapper> pathNodesTree = new GH_Structure<GH_ObjectWrapper>();

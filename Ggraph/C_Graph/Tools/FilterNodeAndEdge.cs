@@ -75,6 +75,11 @@ namespace Glab.C_Graph.Tools
             // Iterate through paths in the input trees
             for (int pathIndex = 0; pathIndex < graphTree.Paths.Count; pathIndex++)
             {
+                // Validate input trees
+                graphTree = TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
+                typeTree = TreeUtils.ValidateTreeStructure(graphTree, typeTree);
+                propertiesTree = TreeUtils.ValidateTreeStructure(graphTree, propertiesTree);
+                attributesTree = TreeUtils.ValidateTreeStructure(graphTree, attributesTree);
                 // Extract branches for the current path
                 var graphs = TreeUtils.ExtractBranchData<Graph>(graphTree, pathIndex);
                 var types = TreeUtils.ExtractBranchData(typeTree, pathIndex);

@@ -72,11 +72,11 @@ namespace Glab.C_Graph.Construct
             DA.GetDataTree(4, out linkedObjectsTree);
 
             // Validate and simplify input trees
-            TreeUtils.ValidateTreeStructure(sourceNodesTree, sourceNodesTree);
-            TreeUtils.ValidateTreeStructure(sourceNodesTree, targetNodesTree);
-            TreeUtils.ValidateTreeStructure(sourceNodesTree, typesTree, repeatLast: true, defaultValue: new GH_String("unset"));
-            TreeUtils.ValidateTreeStructure(sourceNodesTree, attributesTree, repeatLast: true);
-            TreeUtils.ValidateTreeStructure(sourceNodesTree, linkedObjectsTree);
+            sourceNodesTree = TreeUtils.ValidateTreeStructure(sourceNodesTree, sourceNodesTree);
+            targetNodesTree = TreeUtils.ValidateTreeStructure(sourceNodesTree, targetNodesTree);
+            typesTree = TreeUtils.ValidateTreeStructure(sourceNodesTree, typesTree, repeatLast: true, defaultValue: new GH_String("unset"));
+            attributesTree = TreeUtils.ValidateTreeStructure(sourceNodesTree, attributesTree, repeatLast: true);
+            linkedObjectsTree = TreeUtils.ValidateTreeStructure(sourceNodesTree, linkedObjectsTree);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> edgesTree = new GH_Structure<GH_ObjectWrapper>();

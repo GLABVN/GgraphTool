@@ -57,8 +57,8 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetData(2, ref maxDistance)) return;
 
             // Validate input trees
-            TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
-            TreeUtils.ValidateTreeStructure(graphTree, nodeTree);
+            graphTree = TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Validate graphTree against itself
+            nodeTree = TreeUtils.ValidateTreeStructure(graphTree, nodeTree);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> neighborNodesTree = new GH_Structure<GH_ObjectWrapper>();

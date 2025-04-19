@@ -52,8 +52,8 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(1, out distanceTree)) return;
 
             // Validate input trees
-            TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
-            TreeUtils.ValidateTreeStructure(graphTree, distanceTree, raiseEqualBranchItemCountError: true);
+            graphTree = TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
+            distanceTree = TreeUtils.ValidateTreeStructure(graphTree, distanceTree, raiseEqualBranchItemCountError: true);
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> modifiedGraphTree = new GH_Structure<GH_ObjectWrapper>();

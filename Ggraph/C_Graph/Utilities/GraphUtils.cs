@@ -119,6 +119,8 @@ namespace Glab.C_Graph
                                 kvp.Value is ICloneable cloneable ? cloneable.Clone() : kvp.Value
                             )
                         ));
+                        // Copy the node's type
+                        newSourceNode.Type = originalEdge.Source.Type;
                     }
                     if (PointUtils.ArePointsEqual(endPoint, originalEdge.Target.Point))
                     {
@@ -128,6 +130,8 @@ namespace Glab.C_Graph
                                 kvp.Value is ICloneable cloneable ? cloneable.Clone() : kvp.Value
                             )
                         ));
+                        // Copy the node's type
+                        newTargetNode.Type = originalEdge.Target.Type;
                     }
 
                     // Create a new edge by deep copying the original and updating relevant properties
@@ -166,7 +170,9 @@ namespace Glab.C_Graph
                 if (nodes != null)
                 {
                     foreach (var node in nodes)
-                    {
+                    { 
+                        if (node == null)
+                            continue;
                         var nodePoint = node.Point;
                         nodeDict[nodePoint] = node.DeepCopy();
                     }
@@ -175,6 +181,8 @@ namespace Glab.C_Graph
                 // Add nodes from edges if they don't exist in nodeDict
                 foreach (var edge in deepCopiedEdges)
                 {
+                    if (edge == null)
+                        continue;
                     var sourcePoint = edge.Source.Point;
                     var targetPoint = edge.Target.Point;
 

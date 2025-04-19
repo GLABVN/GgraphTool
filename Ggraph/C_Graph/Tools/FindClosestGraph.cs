@@ -55,8 +55,8 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(1, out pointTree)) return;
 
             // Validate input trees
-            TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
-            TreeUtils.ValidateTreeStructure(graphTree, pointTree);
+            graphTree = TreeUtils.ValidateTreeStructure(graphTree, graphTree); // Validate graphTree against itself
+            pointTree = TreeUtils.ValidateTreeStructure(graphTree, pointTree);
 
             // Initialize output data structures
             var closestGraphsTree = new GH_Structure<GH_ObjectWrapper>();

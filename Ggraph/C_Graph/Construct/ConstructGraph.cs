@@ -69,9 +69,9 @@ namespace Glab.C_Graph
             DA.GetDataTree(3, out attributesTree);
 
             // Validate input trees
-            TreeUtils.ValidateTreeStructure(edgesTree, edgesTree); // Validate edgesTree against itself
-            TreeUtils.ValidateTreeStructure(edgesTree, nodesTree);
-            TreeUtils.ValidateTreeStructure(edgesTree, attributesTree);
+            edgesTree = TreeUtils.ValidateTreeStructure(edgesTree, edgesTree); // Validate edgesTree against itself
+            nodesTree = TreeUtils.ValidateTreeStructure(edgesTree, nodesTree);
+            attributesTree = TreeUtils.ValidateTreeStructure(edgesTree, attributesTree);
 
             // Initialize output data structures
             GH_Structure<GH_ObjectWrapper> graphsTree = new GH_Structure<GH_ObjectWrapper>();

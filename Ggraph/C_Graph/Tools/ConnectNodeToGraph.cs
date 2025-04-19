@@ -52,8 +52,9 @@ namespace Glab.C_Graph.Tools
             if (!DA.GetDataTree(1, out nodeTree)) return;
 
             // Validate input trees
-            TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Ensure each branch in graphTree has exactly one graph
-            TreeUtils.ValidateTreeStructure(graphTree, nodeTree); // Validate nodeTree against graphTree
+            graphTree = TreeUtils.ValidateTreeStructure(graphTree, graphTree, check1Branch1Item: true); // Ensure each branch in graphTree has exactly one graph
+            nodeTree = TreeUtils.ValidateTreeStructure(graphTree, nodeTree); // Validate nodeTree against graphTree
+
 
             // Initialize output data structure
             GH_Structure<GH_ObjectWrapper> modifiedGraphTree = new GH_Structure<GH_ObjectWrapper>();

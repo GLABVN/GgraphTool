@@ -128,7 +128,7 @@ namespace Glab.C_Graph
             {
                 EdgeCurve = EdgeCurve?.DuplicateCurve(),
                 Attributes = new Dictionary<string, object>(Attributes),
-                GGUID = Guid.NewGuid(),
+                GGUID = this.GGUID,
                 QuickGraphEdge = this.QuickGraphEdge // Copy the QuickGraph edge property
             };
 

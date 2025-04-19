@@ -125,7 +125,7 @@ namespace Glab.C_Graph
             {
                 Id = this.Id,
                 Attributes = new Dictionary<string, object>(this.Attributes),
-                GGUID = Guid.NewGuid()
+                GGUID = this.GGUID
             };
 
             // Associate the copied node with the same graph as the original node
