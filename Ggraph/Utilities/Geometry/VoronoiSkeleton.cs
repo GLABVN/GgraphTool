@@ -10,150 +10,184 @@ namespace Glab.Utilities
 {
     public static class VoronoiSkeleton
     {
-        public static void ExtractVoronoiSkeleton(Polyline boundaryPolyline, out List<Polyline> skeleton, out Graph skeletonGraph, double divisionLength = 4.0)
+        public static void ExtractVoronoiSkeleton(
+            List<Polyline> boundaryPolylines,
+            out List<Polyline> skeleton,
+            out Graph skeletonGraph,
+            out List<Curve> uniqueLines,
+            double divisionLength = 4.0)
         {
             skeleton = new List<Polyline>();
             skeletonGraph = new Graph();
+            uniqueLines = new List<Curve>();
 
-            // Validate polyline
-            if (boundaryPolyline == null)
-                return;
+            if (boundaryPolylines == null || boundaryPolylines.Count == 0)
+                throw new ArgumentException("Input polylines must not be null or empty.");
 
-            // Check if polyline is closed
-            if (!boundaryPolyline.IsClosed)
-                throw new ArgumentException("ExtractVoronoiSkeleton: Input polyline must be closed.");
+            // Convert polylines to curves
+            var curves = boundaryPolylines
+                .Where(pl => pl != null && pl.IsClosed)
+                .Select(pl => (Curve)pl.ToNurbsCurve())
+                .ToList();
 
-            // Check if polyline is planar
-            var boundaryCurve = boundaryPolyline.ToNurbsCurve();
-            if (!boundaryCurve.IsPlanar())
-                throw new ArgumentException("ExtractVoronoiSkeleton: Input polyline must be planar.");
+            // Use containment logic to group curves into outer boundaries and holes
+            var curvesWithContainment = CurveUtils.CreateCurveWithContainment(curves);
+            var curveGroups = CurveUtils.GroupCurvesByContainment(curvesWithContainment);
 
-            // Step 1: Divide the polyline into points with appropriate spacing
-            HashSet<Point3d> uniquePoints = new HashSet<Point3d>();
-            List<Point3d> points = new List<Point3d>();
-            for (int i = 0; i < boundaryPolyline.SegmentCount; i++)
+            List<Curve> allUniqueLines = new List<Curve>();
+
+            foreach (var group in curveGroups)
             {
-                Line segment = boundaryPolyline.SegmentAt(i);
-                double length = segment.Length;
-                int divisions = Math.Max((int)(length / divisionLength), 1);
+                // Outer boundary
+                Polyline outerPolyline;
+                if (!group.OuterCurve.TryGetPolyline(out outerPolyline))
+                    continue;
 
-                // Convert segment to NurbsCurve
-                NurbsCurve nurbsCurve = segment.ToNurbsCurve();
+                // Holes
+                var holes = group.Holes;
 
-                // Add segment start point
-                if (uniquePoints.Add(segment.From))
+                // Step 1: Divide the polyline into points with appropriate spacing
+                HashSet<Point3d> uniquePoints = new HashSet<Point3d>();
+                List<Point3d> points = new List<Point3d>();
+                // Divide outer boundary
+                for (int i = 0; i < outerPolyline.SegmentCount; i++)
                 {
-                    points.Add(segment.From);
-                }
+                    Line segment = outerPolyline.SegmentAt(i);
+                    double length = segment.Length;
+                    int divisions = Math.Max((int)(length / divisionLength), 1);
 
-                // Add intermediate points using DivideByCount
-                Point3d[] divisionPoints;
-                nurbsCurve.DivideByCount(divisions, true, out divisionPoints);
-                foreach (var point in divisionPoints)
-                {
-                    if (uniquePoints.Add(point))
+                    NurbsCurve nurbsCurve = segment.ToNurbsCurve();
+
+                    if (uniquePoints.Add(segment.From))
+                        points.Add(segment.From);
+
+                    Point3d[] divisionPoints;
+                    nurbsCurve.DivideByCount(divisions, true, out divisionPoints);
+                    foreach (var point in divisionPoints)
                     {
-                        points.Add(point);
+                        if (uniquePoints.Add(point))
+                            points.Add(point);
                     }
                 }
-            }
-
-            // Step 2: Create bounding box for outline
-            BoundingBox bb = new BoundingBox(points);
-            Vector3d diagonal = bb.Diagonal;
-            double inflationFactor = diagonal.Length / 15;
-            bb.Inflate(inflationFactor, inflationFactor, inflationFactor);
-            Point3d[] bbCorners = bb.GetCorners();
-
-            // Step 3: Convert points to Node2 format
-            Node2List nodes = new Node2List();
-            foreach (Point3d p in points)
-            {
-                nodes.Append(new Node2(p.X, p.Y));
-            }
-
-            // Create outline nodes from bounding box
-            Node2List outline = new Node2List();
-            foreach (Point3d p in bbCorners)
-            {
-                outline.Append(new Node2(p.X, p.Y));
-            }
-
-            // Step 4: Generate Delaunay triangulation
-            var delaunay = Grasshopper.Kernel.Geometry.Delaunay.Solver.Solve_Connectivity(nodes, 0.01, false);
-
-            // Step 5: Generate Voronoi diagram
-            var voronoi = Grasshopper.Kernel.Geometry.Voronoi.Solver.Solve_Connectivity(nodes, delaunay, outline);
-
-            // Step 6: Explode Voronoi cells into individual line segments
-            List<Curve> allLines = new List<Curve>();
-            foreach (var cell in voronoi)
-            {
-                Polyline pl = cell.ToPolyline();
-                foreach (var segment in pl.GetSegments())
+                // Divide holes as well
+                foreach (var hole in holes)
                 {
-                    allLines.Add(segment.ToNurbsCurve());
-                }
-            }
-
-            // Step 7: Remove duplicate lines
-            List<Curve> uniqueLines = CurveUtils.RemoveDuplicateLineCurves(allLines);
-
-            // Step 8: Trim lines to the boundary curve and keep only the segments inside
-            List<Curve> trimmedLines = new List<Curve>();
-            foreach (var line in uniqueLines)
-            {
-                var intersections = Intersection.CurveCurve(line, boundaryCurve, 0.001, 0.001);
-                if (intersections.Count > 0)
-                {
-                    foreach (var intersection in intersections)
+                    Polyline holePolyline;
+                    if (hole.TryGetPolyline(out holePolyline))
                     {
-                        if (intersection.IsPoint)
+                        for (int i = 0; i < holePolyline.SegmentCount; i++)
                         {
-                            var trimmedLine = line.Trim(intersection.ParameterA, line.Domain.Max);
-                            if (trimmedLine != null && boundaryCurve.Contains(trimmedLine.PointAt(trimmedLine.Domain.Mid), Rhino.Geometry.Plane.WorldXY, 0.001) == PointContainment.Inside)
+                            Line segment = holePolyline.SegmentAt(i);
+                            double length = segment.Length;
+                            int divisions = Math.Max((int)(length / divisionLength), 1);
+
+                            NurbsCurve nurbsCurve = segment.ToNurbsCurve();
+
+                            if (uniquePoints.Add(segment.From))
+                                points.Add(segment.From);
+
+                            Point3d[] divisionPoints;
+                            nurbsCurve.DivideByCount(divisions, true, out divisionPoints);
+                            foreach (var point in divisionPoints)
                             {
-                                trimmedLines.Add(trimmedLine);
+                                if (uniquePoints.Add(point))
+                                    points.Add(point);
                             }
                         }
                     }
                 }
-                else
+
+                // Step 2: Create bounding box for outline
+                BoundingBox bb = new BoundingBox(points);
+                Vector3d diagonal = bb.Diagonal;
+                double inflationFactor = diagonal.Length / 15;
+                bb.Inflate(inflationFactor, inflationFactor, inflationFactor);
+                Point3d[] bbCorners = bb.GetCorners();
+
+                // Step 3: Convert points to Node2 format
+                Node2List nodes = new Node2List();
+                foreach (Point3d p in points)
+                    nodes.Append(new Node2(p.X, p.Y));
+
+                Node2List outline = new Node2List();
+                foreach (Point3d p in bbCorners)
+                    outline.Append(new Node2(p.X, p.Y));
+
+                // Step 4: Generate Delaunay triangulation
+                var delaunay = Grasshopper.Kernel.Geometry.Delaunay.Solver.Solve_Connectivity(nodes, 0.01, false);
+
+                // Step 5: Generate Voronoi diagram
+                var voronoi = Grasshopper.Kernel.Geometry.Voronoi.Solver.Solve_Connectivity(nodes, delaunay, outline);
+
+                // Step 6: Explode Voronoi cells into individual line segments
+                List<Curve> allLines = new List<Curve>();
+                foreach (var cell in voronoi)
                 {
-                    if (boundaryCurve.Contains(line.PointAt(line.Domain.Mid), Rhino.Geometry.Plane.WorldXY, 0.001) == PointContainment.Inside)
+                    Polyline pl = cell.ToPolyline();
+                    foreach (var segment in pl.GetSegments())
+                        allLines.Add(segment.ToNurbsCurve());
+                }
+
+                // Step 7: Remove duplicate lines
+                List<Curve> groupUniqueLines = CurveUtils.RemoveDuplicateLineCurves(allLines);
+                allUniqueLines.AddRange(groupUniqueLines);
+
+                // Step 8: Remove lines that intersect with the outer curve or any hole, then trim lines to the boundary curve and keep only the segments inside
+                List<Curve> trimmedLines = new List<Curve>();
+                foreach (var line in groupUniqueLines)
+                {
+                    // Check intersection with outer curve
+                    var outerIntersections = Intersection.CurveCurve(line, group.OuterCurve, 0.001, 0.001);
+                    if (outerIntersections.Count > 0)
+                        continue; // Skip lines that intersect the outer curve
+
+                    // Check intersection with any hole
+                    bool intersectsHole = false;
+                    foreach (var hole in holes)
                     {
-                        trimmedLines.Add(line);
+                        var holeIntersections = Intersection.CurveCurve(line, hole, 0.001, 0.001);
+                        if (holeIntersections.Count > 0)
+                        {
+                            intersectsHole = true;
+                            break;
+                        }
+                    }
+                    if (intersectsHole)
+                        continue; // Skip lines that intersect any hole
+
+                    // If the line does not intersect the outer curve or any hole, check if it's inside the boundary
+                    if (group.OuterCurve.Contains(line.PointAt(line.Domain.Mid), Rhino.Geometry.Plane.WorldXY, 0.001) == PointContainment.Inside)
+                    {
+                        bool inHole = holes.Any(hole => hole.Contains(line.PointAt(line.Domain.Mid), Rhino.Geometry.Plane.WorldXY, 0.001) == PointContainment.Inside);
+                        if (!inHole)
+                            trimmedLines.Add(line);
+                    }
+                }
+
+
+                // Step 9: Reconstruct polylines from trimmed lines
+                Rhino.Geometry.Plane boundaryPlane;
+                if (!group.OuterCurve.TryGetPlane(out boundaryPlane))
+                    throw new InvalidOperationException("Failed to get the plane of the boundary polyline.");
+
+                foreach (var line in trimmedLines)
+                {
+                    Polyline pl;
+                    if (line.TryGetPolyline(out pl))
+                    {
+                        for (int i = 0; i < pl.Count; i++)
+                            pl[i] = boundaryPlane.ClosestPoint(pl[i]);
+                        skeleton.Add(pl);
                     }
                 }
             }
 
-            // Step 9: Reconstruct polylines from trimmed lines
-            Rhino.Geometry.Plane boundaryPlane;
-            if (!boundaryCurve.TryGetPlane(out boundaryPlane))
-            {
-                throw new InvalidOperationException("Failed to get the plane of the boundary polyline.");
-            }
-
-            foreach (var line in trimmedLines)
-            {
-                Polyline pl;
-                if (line.TryGetPolyline(out pl))
-                {
-                    // Project each point of the polyline back to the plane of the input boundaryPolyline
-                    for (int i = 0; i < pl.Count; i++)
-                    {
-                        pl[i] = boundaryPlane.ClosestPoint(pl[i]);
-                    }
-                    skeleton.Add(pl);
-                }
-            }
+            uniqueLines = allUniqueLines;
 
             // Step 10: Create graph from skeleton
             List<GEdge> graphEdges = new List<GEdge>();
-
             foreach (var polyline in skeleton)
             {
-                // Create edge for each segment in the polyline
                 var segments = polyline.GetSegments();
                 foreach (var segment in segments)
                 {
@@ -169,13 +203,9 @@ namespace Glab.Utilities
             List<GEdge> isolatedEdges;
             skeletonGraph = GraphUtils.CreateGraphFromNodesAndEdges(null, graphEdges, out isolatedNodes, out isolatedEdges, divideEdge: false);
 
-            // Check if the graph is fully connected
             if (!skeletonGraph.IsGraphFullyConnected)
-            {
                 throw new InvalidOperationException("The Voronoi graph is out of tolerance and not fully connected.");
-            }
 
-            // Step 11: Prune graph once
             skeletonGraph = GraphUtils.PruneGraphByType(skeletonGraph, pruneOnce: true);
         }
     }
