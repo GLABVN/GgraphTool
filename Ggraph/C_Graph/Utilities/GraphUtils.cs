@@ -1545,13 +1545,13 @@ namespace Glab.C_Graph
             {
                 Graph = new
                 {
-                    Properties = graph.PropJSON, // Include graph properties
+                    Properties = graph.PropDict, // Include graph properties
                     Attributes = graph.Attributes,
 
                     // Nodes data
                     Nodes = graph.QuickGraphObj.Vertices.Select(node => new
                     {
-                        Properties = node.PropJSON, // Include node properties
+                        Properties = node.PropDict, // Include node properties
                         Attributes = node.Attributes,
                         // Include geometry data conditionally
                         Point = includeGeometry ? new
@@ -1565,7 +1565,7 @@ namespace Glab.C_Graph
                     // Edges data
                     Edges = graph.QuickGraphObj.Edges.Select(edge => new
                     {
-                        Properties = edge.PropJSON, // Include edge properties
+                        Properties = edge.PropDict, // Include edge properties
                         Attributes = edge.Attributes,
                         // Store source and target node IDs for connectivity
                         SourceNodeID = edge.Source.Id,

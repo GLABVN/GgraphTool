@@ -100,7 +100,7 @@ namespace Glab.C_Graph.Tools
                     // Check matches for type, properties, and attributes
                     var matchesType = types.Select(type => type == null || type == node.Type).ToList();
                     var matchesProperties = properties.Select(propDict =>
-                        propDict == null || propDict.All(kv => node.PropJSON.ContainsKey(kv.Key) && node.PropJSON[kv.Key]?.ToString() == kv.Value?.ToString())).ToList();
+                        propDict == null || propDict.All(kv => node.PropDict.ContainsKey(kv.Key) && node.PropDict[kv.Key]?.ToString() == kv.Value?.ToString())).ToList();
                     var matchesAttributes = attributes.Select(attrDict =>
                         attrDict == null || attrDict.All(kv => node.Attributes.ContainsKey(kv.Key) && node.Attributes[kv.Key]?.ToString() == kv.Value?.ToString())).ToList();
 
@@ -117,7 +117,7 @@ namespace Glab.C_Graph.Tools
                     // Check matches for type, properties, and attributes
                     var matchesType = types.Select(type => type == null || type == edge.Type).ToList();
                     var matchesProperties = properties.Select(propDict =>
-                        propDict == null || propDict.All(kv => edge.PropJSON.ContainsKey(kv.Key) && edge.PropJSON[kv.Key]?.ToString() == kv.Value?.ToString())).ToList();
+                        propDict == null || propDict.All(kv => edge.PropDict.ContainsKey(kv.Key) && edge.PropDict[kv.Key]?.ToString() == kv.Value?.ToString())).ToList();
                     var matchesAttributes = attributes.Select(attrDict =>
                         attrDict == null || attrDict.All(kv => edge.Attributes.ContainsKey(kv.Key) && edge.Attributes[kv.Key]?.ToString() == kv.Value?.ToString())).ToList();
 

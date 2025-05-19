@@ -19,7 +19,7 @@ namespace Glab.C_Graph
         public Curve EdgeCurve { get; set; }
         public List<Curve> EdgeOffsetedCurves { get; private set; } = new List<Curve>();
 
-        public Dictionary<string, object> PropJSON
+        public Dictionary<string, object> PropDict
         {
             get
             {

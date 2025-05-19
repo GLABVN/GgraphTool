@@ -180,7 +180,7 @@ namespace Glab.C_Graph.Visualize
                         // Create text for node properties if showNodeProperties is true
                         if (showNodeProperties)
                         {
-                            string propertiesJson = JsonConvert.SerializeObject(node.PropJSON, Formatting.Indented);
+                            string propertiesJson = JsonConvert.SerializeObject(node.PropDict, Formatting.Indented);
                             nodePropertyTexts.Add((propertiesJson, node.Point));
                         }
 

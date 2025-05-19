@@ -13,12 +13,12 @@ namespace Glab.Utilities
         public static void ExtractVoronoiSkeleton(
             List<Polyline> boundaryPolylines,
             out List<Polyline> skeleton,
-            out Graph skeletonGraph,
+            out List<Graph> skeletonGraphs,
             out List<Curve> uniqueLines,
             double divisionLength = 4.0)
         {
             skeleton = new List<Polyline>();
-            skeletonGraph = new Graph();
+            skeletonGraphs = new List<Graph>();
             uniqueLines = new List<Curve>();
 
             if (boundaryPolylines == null || boundaryPolylines.Count == 0)
@@ -30,9 +30,8 @@ namespace Glab.Utilities
                 .Select(pl => (Curve)pl.ToNurbsCurve())
                 .ToList();
 
-            // Use containment logic to group curves into outer boundaries and holes
-            var curvesWithContainment = CurveUtils.CreateCurveWithContainment(curves);
-            var curveGroups = CurveUtils.GroupCurvesByContainment(curvesWithContainment);
+            // Use improved containment logic to group curves into outer boundaries and holes
+            var curveGroups = CurveUtils.FilterCurvesByContainment(curves);
 
             List<Curve> allUniqueLines = new List<Curve>();
 
@@ -40,11 +39,13 @@ namespace Glab.Utilities
             {
                 // Outer boundary
                 Polyline outerPolyline;
-                if (!group.OuterCurve.TryGetPolyline(out outerPolyline))
+                if (!group.outer.TryGetPolyline(out outerPolyline))
                     continue;
 
-                // Holes
-                var holes = group.Holes;
+                // Holes: combine even and odd as needed, or use one set depending on your logic
+                var holes = new List<Curve>();
+                if (group.even != null) holes.AddRange(group.even);
+                if (group.odd != null) holes.AddRange(group.odd);
 
                 // Step 1: Divide the polyline into points with appropriate spacing
                 HashSet<Point3d> uniquePoints = new HashSet<Point3d>();
@@ -137,7 +138,7 @@ namespace Glab.Utilities
                 foreach (var line in groupUniqueLines)
                 {
                     // Check intersection with outer curve
-                    var outerIntersections = Intersection.CurveCurve(line, group.OuterCurve, 0.001, 0.001);
+                    var outerIntersections = Intersection.CurveCurve(line, group.outer, 0.001, 0.001);
                     if (outerIntersections.Count > 0)
                         continue; // Skip lines that intersect the outer curve
 
@@ -156,7 +157,7 @@ namespace Glab.Utilities
                         continue; // Skip lines that intersect any hole
 
                     // If the line does not intersect the outer curve or any hole, check if it's inside the boundary
-                    if (group.OuterCurve.Contains(line.PointAt(line.Domain.Mid), Rhino.Geometry.Plane.WorldXY, 0.001) == PointContainment.Inside)
+                    if (group.outer.Contains(line.PointAt(line.Domain.Mid), Rhino.Geometry.Plane.WorldXY, 0.001) == PointContainment.Inside)
                     {
                         bool inHole = holes.Any(hole => hole.Contains(line.PointAt(line.Domain.Mid), Rhino.Geometry.Plane.WorldXY, 0.001) == PointContainment.Inside);
                         if (!inHole)
@@ -164,10 +165,9 @@ namespace Glab.Utilities
                     }
                 }
 
-
                 // Step 9: Reconstruct polylines from trimmed lines
                 Rhino.Geometry.Plane boundaryPlane;
-                if (!group.OuterCurve.TryGetPlane(out boundaryPlane))
+                if (!group.outer.TryGetPlane(out boundaryPlane))
                     throw new InvalidOperationException("Failed to get the plane of the boundary polyline.");
 
                 foreach (var line in trimmedLines)
@@ -184,7 +184,7 @@ namespace Glab.Utilities
 
             uniqueLines = allUniqueLines;
 
-            // Step 10: Create graph from skeleton
+            // Step 10: Create graphs from skeleton
             List<GEdge> graphEdges = new List<GEdge>();
             foreach (var polyline in skeleton)
             {
@@ -201,13 +201,16 @@ namespace Glab.Utilities
 
             List<GNode> isolatedNodes;
             List<GEdge> isolatedEdges;
-            skeletonGraph = GraphUtils.CreateGraphFromNodesAndEdges(null, graphEdges, out isolatedNodes, out isolatedEdges, divideEdge: false);
+            skeletonGraphs = GraphUtils.CreateGraphsFromNodesAndEdges(null, graphEdges, out isolatedNodes, out isolatedEdges, divideEdge: false);
 
-            if (!skeletonGraph.IsGraphFullyConnected)
-                throw new InvalidOperationException("The Voronoi graph is out of tolerance and not fully connected.");
-
-            skeletonGraph = GraphUtils.PruneGraphByType(skeletonGraph, pruneOnce: true);
+            // Optionally prune and check connectivity for each graph
+            for (int i = 0; i < skeletonGraphs.Count; i++)
+            {
+                var graph = skeletonGraphs[i];
+                if (!graph.IsGraphFullyConnected)
+                    throw new InvalidOperationException("A Voronoi graph is out of tolerance and not fully connected.");
+                skeletonGraphs[i] = GraphUtils.PruneGraphByType(graph, pruneOnce: true);
+            }
         }
     }
-
 }

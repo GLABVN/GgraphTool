@@ -16,7 +16,7 @@ namespace Glab.C_Graph
         public string Id { get; set; }
         public Point3d Point { get; set; }
         public string Type { get; set; } = "unset";
-        public Dictionary<string, object> PropJSON
+        public Dictionary<string, object> PropDict
         {
             get
             {

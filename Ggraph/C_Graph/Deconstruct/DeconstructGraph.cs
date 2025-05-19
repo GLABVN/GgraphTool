@@ -88,7 +88,7 @@ namespace Glab.C_Graph
                         GH_Path subPath = path.AppendElement(j);
 
                         // Serialize graph properties (PropJSON) to JSON
-                        string propertiesJson = JsonConvert.SerializeObject(graph.PropJSON, Formatting.Indented);
+                        string propertiesJson = JsonConvert.SerializeObject(graph.PropDict, Formatting.Indented);
                         graphProperties.Append(new GH_String(propertiesJson), subPath);
 
                         // Serialize graph attributes to JSON

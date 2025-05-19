@@ -91,7 +91,7 @@ namespace Glab.C_Graph
                     if (wrapper.Value is GEdge edge)
                     {
                         // Serialize edge properties (PropJSON) to JSON
-                        string propertiesJson = JsonConvert.SerializeObject(edge.PropJSON, Formatting.Indented);
+                        string propertiesJson = JsonConvert.SerializeObject(edge.PropDict, Formatting.Indented);
                         edgeProperties.Append(new GH_String(propertiesJson), path);
 
                         // Serialize edge attributes to JSON

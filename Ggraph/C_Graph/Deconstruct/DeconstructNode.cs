@@ -85,7 +85,7 @@ namespace Glab.C_Graph
                     if (wrapper.Value is GNode node)
                     {
                         // Serialize node properties (PropJSON) to JSON
-                        string propertiesJson = JsonConvert.SerializeObject(node.PropJSON, Formatting.Indented);
+                        string propertiesJson = JsonConvert.SerializeObject(node.PropDict, Formatting.Indented);
                         nodeProperties.Append(new GH_String(propertiesJson), path);
 
                         // Serialize node attributes to JSON

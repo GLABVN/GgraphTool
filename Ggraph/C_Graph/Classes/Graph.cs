@@ -16,7 +16,7 @@ namespace Glab.C_Graph
     public class Graph : IConnectable
     {
         public UndirectedGraph<GNode, GEdge> QuickGraphObj { get; set; } = new UndirectedGraph<GNode, GEdge>();
-        public Dictionary<string, object> PropJSON
+        public Dictionary<string, object> PropDict
         {
             get
             {
@@ -66,16 +66,6 @@ namespace Glab.C_Graph
             {
                 node.Id = $"N{nodeId++}";
             }
-        }
-
-        // Method to convert graph properties to attributes
-        public virtual void ConvertPropertiesToJSON()
-        {
-            // Add basic properties to the Attributes dictionary
-            Attributes["NodeCount"] = QuickGraphObj.VertexCount;
-            Attributes["EdgeCount"] = QuickGraphObj.EdgeCount;
-            Attributes["Type"] = Type;
-            Attributes["FullyConnected"] = IsGraphFullyConnected;
         }
 
         // Deep copy method
